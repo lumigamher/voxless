@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
 )
 
 from .config import Config, save_config, save_prompt
+from .permissions import Permission, list_permissions
 from .prompts import load_prompt
 
 log = logging.getLogger(__name__)
@@ -173,6 +174,8 @@ QCheckBox::indicator { background: #1c1c1e; border-color: #3a3a3c; }
 
 NAV_ITEMS = [
     ("home", "Inicio"),
+    ("general", "General"),
+    ("permissions", "Permisos"),
     ("whisper", "Whisper"),
     ("ollama", "Ollama"),
     ("prompt", "Prompt"),
@@ -355,6 +358,172 @@ class HomePage(QWidget):
         self.status_sub.setText(sub)
         self.dot.set_state(state)
         self.waveform.set_active(state == "recording")
+
+
+class GeneralPage(QWidget):
+    def __init__(self, cfg: Config, on_save: Callable[[Config], None]) -> None:
+        super().__init__()
+        self._cfg = cfg
+        self._on_save = on_save
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
+
+        layout.addWidget(_title_block(
+            "General",
+            "Hotkey, modo de activación y duración mínima.",
+        ))
+
+        card, c = _card("Hotkey")
+        self.hotkey_edit = QLineEdit(cfg.hotkey)
+        self.hotkey_edit.setPlaceholderText("ej. right_option, f5, <ctrl>+<shift>+space")
+        c.addLayout(_row("Tecla", self.hotkey_edit))
+
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItem("Mantener presionado (push-to-talk)", "hold")
+        self.mode_combo.addItem("Tap: tocar para iniciar / tocar para terminar", "toggle")
+        idx = self.mode_combo.findData(cfg.hotkey_mode)
+        if idx >= 0:
+            self.mode_combo.setCurrentIndex(idx)
+        c.addLayout(_row("Modo", self.mode_combo))
+
+        layout.addWidget(card)
+
+        card2, c2 = _card("Comportamiento")
+        self.min_ms = QSpinBox()
+        self.min_ms.setRange(0, 5000)
+        self.min_ms.setSingleStep(50)
+        self.min_ms.setSuffix(" ms")
+        self.min_ms.setValue(cfg.min_record_ms)
+        c2.addLayout(_row("Duración mínima", self.min_ms))
+
+        self.sound = QCheckBox("Sonido al iniciar / detener grabación")
+        self.sound.setChecked(cfg.sound_feedback)
+        c2.addWidget(self.sound)
+
+        layout.addWidget(card2)
+
+        save_row = QHBoxLayout()
+        save_row.addStretch(1)
+        save_btn = QPushButton("Guardar")
+        save_btn.setObjectName("Primary")
+        save_btn.clicked.connect(self._save)
+        save_row.addWidget(save_btn)
+        layout.addLayout(save_row)
+        layout.addStretch(1)
+
+    def _save(self) -> None:
+        self._cfg.hotkey = self.hotkey_edit.text().strip() or "right_option"
+        self._cfg.hotkey_mode = self.mode_combo.currentData()
+        self._cfg.min_record_ms = int(self.min_ms.value())
+        self._cfg.sound_feedback = self.sound.isChecked()
+        self._on_save(self._cfg)
+
+
+class PermissionsPage(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self._rows: list[tuple[Permission, QLabel]] = []
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
+
+        layout.addWidget(_title_block(
+            "Permisos",
+            "Necesarios para que voxless escuche tu hotkey y grabe el micrófono globalmente.",
+        ))
+
+        card, c = _card("Estado")
+        perms = list_permissions()
+        if not perms:
+            note = QLabel("Tu plataforma no requiere configuración adicional.")
+            note.setStyleSheet("color:#6e6e73;")
+            c.addWidget(note)
+        else:
+            for perm in perms:
+                c.addWidget(self._build_row(perm))
+
+        refresh = QPushButton("Verificar de nuevo")
+        refresh.clicked.connect(self.refresh)
+        actions = QHBoxLayout()
+        actions.addStretch(1)
+        actions.addWidget(refresh)
+        c.addLayout(actions)
+        layout.addWidget(card)
+
+        tips_card, tc = _card("Consejos")
+        tips = QLabel(
+            "• En macOS, si el panel de System Settings no deja seleccionar voxless, arrastra "
+            "<code>/Applications/voxless.app</code> desde Finder al panel.\n"
+            "• Tras conceder un permiso, vuelve aquí y pulsa <b>Verificar de nuevo</b>.\n"
+            "• Si cambias o reemplazas voxless.app, macOS puede pedirte re-autorizar."
+        )
+        tips.setWordWrap(True)
+        tips.setTextFormat(Qt.TextFormat.RichText)
+        tips.setStyleSheet("color:#1d1d1f; font-size:13px;")
+        tc.addWidget(tips)
+        layout.addWidget(tips_card)
+
+        layout.addStretch(1)
+
+    def _build_row(self, perm: Permission) -> QWidget:
+        row = QFrame()
+        rl = QHBoxLayout(row)
+        rl.setContentsMargins(0, 6, 0, 6)
+        rl.setSpacing(12)
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(2)
+        t = QLabel(perm.title)
+        t.setStyleSheet("color:#1d1d1f; font-weight:600; font-size:14px;")
+        d = QLabel(perm.description)
+        d.setStyleSheet("color:#6e6e73; font-size:12px;")
+        d.setWordWrap(True)
+        title_col.addWidget(t)
+        title_col.addWidget(d)
+        rl.addLayout(title_col, 1)
+
+        status = QLabel("…")
+        status.setMinimumWidth(90)
+        status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        rl.addWidget(status)
+
+        btn = QPushButton("Abrir ajustes")
+        btn.clicked.connect(perm.open_settings)
+        rl.addWidget(btn)
+
+        self._rows.append((perm, status))
+        self._render(perm, status)
+        return row
+
+    def _render(self, perm: Permission, label: QLabel) -> None:
+        try:
+            st = perm.detect()
+        except Exception:
+            st = "unknown"
+        if st == "granted":
+            label.setText("Concedido")
+            label.setStyleSheet(
+                "color:#0a7c0a; background:rgba(52,199,89,0.15);"
+                "border-radius:8px; padding:4px 10px; font-weight:600;"
+            )
+        elif st == "denied":
+            label.setText("Falta")
+            label.setStyleSheet(
+                "color:#b40000; background:rgba(255,59,48,0.15);"
+                "border-radius:8px; padding:4px 10px; font-weight:600;"
+            )
+        else:
+            label.setText("Desconocido")
+            label.setStyleSheet(
+                "color:#6e6e73; background:rgba(142,142,147,0.15);"
+                "border-radius:8px; padding:4px 10px; font-weight:600;"
+            )
+
+    def refresh(self) -> None:
+        for perm, lbl in self._rows:
+            self._render(perm, lbl)
 
 
 class WhisperPage(QWidget):
@@ -606,25 +775,34 @@ class MainWindow(QMainWindow):
 
         self.stack = QStackedWidget()
         self.home_page = HomePage()
+        self.general_page = GeneralPage(cfg, self._handle_config_save)
+        self.permissions_page = PermissionsPage()
         self.whisper_page = WhisperPage(cfg, self._handle_config_save)
         self.ollama_page = OllamaPage(cfg, self._handle_config_save)
         self.prompt_page = PromptPage(self._handle_prompt_save)
         self.history_page = HistoryPage()
         for w in (
             self.home_page,
+            self.general_page,
+            self.permissions_page,
             self.whisper_page,
             self.ollama_page,
             self.prompt_page,
             self.history_page,
         ):
             self.stack.addWidget(w)
-        self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.nav.currentRowChanged.connect(self._on_nav_change)
         content_layout.addWidget(self.stack, 1)
 
         root_layout.addWidget(content, 1)
         self.setCentralWidget(root)
 
         self._apply_qss()
+
+    def _on_nav_change(self, idx: int) -> None:
+        self.stack.setCurrentIndex(idx)
+        if self.stack.currentWidget() is self.permissions_page:
+            self.permissions_page.refresh()
 
     def _apply_qss(self) -> None:
         qss = QSS

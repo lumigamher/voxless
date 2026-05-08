@@ -29,6 +29,7 @@ PROMPT_PATH = CONFIG_DIR / "prompt.md"
 
 DEFAULT_CONFIG_TOML = """\
 hotkey = "right_option"
+hotkey_mode = "hold"
 min_record_ms = 250
 sound_feedback = false
 
@@ -73,8 +74,12 @@ class PasteConfig(BaseModel):
     restore_clipboard: bool = True
 
 
+HotkeyMode = Literal["hold", "toggle"]
+
+
 class Config(BaseModel):
     hotkey: str = "right_option"
+    hotkey_mode: HotkeyMode = "hold"
     min_record_ms: int = Field(250, ge=0)
     sound_feedback: bool = False
     whisper: WhisperConfig = Field(default_factory=WhisperConfig)
@@ -123,6 +128,7 @@ def save_config(cfg: Config, path: Path | None = None) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         f"hotkey = {_toml_value(cfg.hotkey)}",
+        f"hotkey_mode = {_toml_value(cfg.hotkey_mode)}",
         f"min_record_ms = {cfg.min_record_ms}",
         f"sound_feedback = {_toml_value(cfg.sound_feedback)}",
         "",

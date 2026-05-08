@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.2 — 2026-05-08
+
+- **New page: Permisos**. Detects Accessibility, Input Monitoring, and Microphone status (granted / falta / desconocido) and exposes one-click buttons to open the matching System Settings pane. Refreshes automatically when the page is shown and on demand.
+- **New page: General**. Edit hotkey, hotkey mode (push-to-talk vs tap-toggle), minimum recording duration, and sound feedback from the UI.
+- **Configurable workflow**: `hotkey_mode = "hold"` (default — keep the key pressed) or `"toggle"` (tap once to start, tap again to stop).
+- **Restored dock icon** — `LSUIElement: False`. voxless behaves like a regular Mac app again, while still keeping the tray icon and single-instance lock from v0.1.1.
+
 ## v0.1.1 — 2026-05-08
 
 - **Single-instance lock** via `QLocalServer`. A second launch now brings the existing window to front and exits, instead of spawning a duplicate.

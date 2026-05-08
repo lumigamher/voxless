@@ -158,6 +158,22 @@ class App:
                 threading.Timer(3.0, lambda: self._set_state("idle")).start()
 
     def _handle_event(self, event: Event) -> None:
+        mode = self._cfg.hotkey_mode
+
+        if mode == "toggle":
+            # Press toggles between idle and recording. Release is ignored.
+            if event != "press":
+                return
+            if self._state == "idle":
+                self._recorder.start()
+                self._record_started_at = time.monotonic()
+                self._set_state("recording")
+                return
+            if self._state == "recording":
+                event = "release"  # fall through to stop logic
+            else:
+                return
+
         if event == "press":
             if self._state != "idle":
                 return
