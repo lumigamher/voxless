@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.1.6 — 2026-05-08
+
+Studio Print Shop redesign.
+
+- **Aesthetic commit**: voxless as a private printing press for your voice. Editorial × analog studio gear. Cream paper bg, ink near-black, single warm-amber accent (VU-meter peak color). Italic serif for display, monospace for technical readouts.
+- **Force Fusion style** at app startup so QSS actually applies — fixes the white-on-white "Guardar cambios" button on macOS.
+- **App icon redesigned** as a typographic monogram (italic serif `v.` on a near-black bevel), regenerated `voxless.icns` + `voxless.ico`.
+- **New sidebar**: italic serif wordmark `voxless.`, micro tagline, numbered TOC nav (`01 INICIO`, `02 GENERAL`, …), warm-amber selection rule on the left edge.
+- **New page header**: section number eyebrow (`§ 02 · WORKSPACE`), italic serif title, italic serif subtitle, hairline below.
+- **New hero**: pull-quote-style "Speak. / It prints.", deep-black hotkey panel with mode marker, VU-style waveform with -30 / -20 / -10 / -3 dB tick marks, paper-feel "LAST" panel with serif italic transcription preview.
+- **Settings rows**: numbered prefixes, serif title + monospace description, control flush right.
+- **Buttons**: monospace ALL CAPS labels, warm-amber primary state, sharp 4px radius.
+- **Toast**: inked stripe + monospace label · message slip.
+
 ## v0.1.5 — 2026-05-08
 
 - **Refined visual hierarchy**. v0.1.4 had white buttons on white cards; now there are three clear surface levels (page · card · interactive). Default buttons use a tonal `#f4f4f5` fill that reads against both backgrounds. Inputs get stronger borders.

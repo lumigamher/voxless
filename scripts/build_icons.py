@@ -21,8 +21,11 @@ ICO_PATH = ASSETS / "voxless.ico"
 
 def _render_svg(size: int):
     from PySide6.QtCore import Qt
-    from PySide6.QtGui import QImage, QPainter
+    from PySide6.QtGui import QGuiApplication, QImage, QPainter
     from PySide6.QtSvg import QSvgRenderer
+
+    if QGuiApplication.instance() is None:
+        QGuiApplication([])
 
     svg = QSvgRenderer(str(SVG))
     if not svg.isValid():

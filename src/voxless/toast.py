@@ -1,8 +1,7 @@
-"""Floating toast notifications anchored to the bottom-right of a window."""
+"""Floating toast — editorial slip aesthetic."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from typing import Literal
 
 from PySide6.QtCore import (
@@ -12,22 +11,23 @@ from PySide6.QtCore import (
     Qt,
     QTimer,
 )
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QFrame,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 ToastVariant = Literal["success", "error", "info"]
 
-VARIANT_COLORS = {
-    "success": ("#0a7c0a", "#dcfce7", "✓"),
-    "error":   ("#b40000", "#fee2e2", "⚠"),
-    "info":    ("#1d4ed8", "#dbeafe", "ⓘ"),
+# stripe + glyph + label color
+VARIANTS = {
+    "success": ("#16a34a", "✓", "OK"),
+    "error":   ("#dc2626", "!", "ERR"),
+    "info":    ("#c2410c", "i", "INFO"),
 }
 
 
@@ -43,49 +43,66 @@ class Toast(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
 
-        accent, bg, glyph = VARIANT_COLORS.get(variant, VARIANT_COLORS["info"])
+        stripe, glyph, label = VARIANTS.get(variant, VARIANTS["info"])
         self.setStyleSheet(
             f"""
             QFrame#ToastBody {{
-              background: rgba(28,28,30,0.96);
-              border-radius: 12px;
-              padding: 0;
+              background: #1a1614;
+              border: 1px solid #3d3733;
+              border-radius: 6px;
             }}
-            QLabel#ToastIcon {{
-              color: {accent};
-              background: {bg};
-              border-radius: 12px;
-              font-size: 14px;
+            QLabel#ToastStripe {{
+              background: {stripe};
+              border-top-left-radius: 6px;
+              border-bottom-left-radius: 6px;
+              max-width: 4px;
+              min-width: 4px;
+            }}
+            QLabel#ToastLabel {{
+              color: {stripe};
+              font-family: "SF Mono", "Menlo", "JetBrains Mono", monospace;
+              font-size: 9px;
               font-weight: 700;
-              min-width: 24px; min-height: 24px;
-              max-width: 24px; max-height: 24px;
-              qproperty-alignment: AlignCenter;
+              letter-spacing: 0.20em;
             }}
             QLabel#ToastText {{
-              color: #f5f5f7;
-              font-size: 13px;
-              font-weight: 500;
+              color: #f4f0e6;
+              font-family: "SF Mono", "Menlo", "JetBrains Mono", monospace;
+              font-size: 11px;
+              font-weight: 600;
+              letter-spacing: 0.06em;
             }}
             """
         )
 
-        from PySide6.QtWidgets import QFrame
-
         body = QFrame(self)
         body.setObjectName("ToastBody")
-        layout = QHBoxLayout(body)
-        layout.setContentsMargins(12, 10, 16, 10)
-        layout.setSpacing(10)
+        body_l = QHBoxLayout(body)
+        body_l.setContentsMargins(0, 0, 0, 0)
+        body_l.setSpacing(0)
 
-        icon = QLabel(glyph)
-        icon.setObjectName("ToastIcon")
-        layout.addWidget(icon)
+        stripe_w = QLabel("")
+        stripe_w.setObjectName("ToastStripe")
+        stripe_w.setFixedWidth(4)
+        body_l.addWidget(stripe_w)
 
+        inner = QHBoxLayout()
+        inner.setContentsMargins(16, 12, 18, 12)
+        inner.setSpacing(14)
+        lbl = QLabel(label)
+        lbl.setObjectName("ToastLabel")
+        inner.addWidget(lbl)
         msg = QLabel(text)
         msg.setObjectName("ToastText")
         msg.setMaximumWidth(420)
         msg.setWordWrap(True)
-        layout.addWidget(msg)
+        inner.addWidget(msg)
+
+        wrap = QFrame()
+        wrap_l = QVBoxLayout(wrap)
+        wrap_l.setContentsMargins(0, 0, 0, 0)
+        wrap_l.addLayout(inner)
+        body_l.addWidget(wrap, 1)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -94,7 +111,7 @@ class Toast(QWidget):
         shadow = QGraphicsDropShadowEffect(body)
         shadow.setBlurRadius(28)
         shadow.setOffset(0, 6)
-        shadow.setColor(QColor(0, 0, 0, 110))
+        shadow.setColor(QColor(0, 0, 0, 90))
         body.setGraphicsEffect(shadow)
 
         self.adjustSize()

@@ -1,20 +1,19 @@
-"""Main application window — sidebar + pages, live waveform, history.
+"""voxless main window — Studio Print Shop aesthetic.
 
-v0.1.4 redesign: cleaner Linear/Raycast-inspired chrome, real SVG icons,
-row-based settings layout, hero home screen, toast on save.
+Editorial × analog studio gear: cream paper × ink × VU-meter amber. Numbered TOC nav,
+italic serif display, monospace technical readouts, hairline rules, em-dashes.
 """
 
 from __future__ import annotations
 
 import logging
+import subprocess
 import sys
 from collections.abc import Callable
 from datetime import datetime
 
 import numpy as np
 from PySide6.QtCore import (
-    QEasingCurve,
-    QPropertyAnimation,
     QSize,
     Qt,
     QTimer,
@@ -35,8 +34,8 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
-    QSlider,
     QSpinBox,
     QStackedWidget,
     QVBoxLayout,
@@ -44,315 +43,44 @@ from PySide6.QtWidgets import (
 )
 
 from .config import Config, save_config, save_prompt
-from .icons import render_icon
 from .permissions import Permission, list_permissions
 from .prompts import load_prompt
 from .toast import Toast
 
 log = logging.getLogger(__name__)
 
-ACCENT = "#dc2626"
-ACCENT_HOVER = "#b91c1c"
-ACCENT_TINT = "rgba(220, 38, 38, 0.10)"
+# ── design tokens ─────────────────────────────────────────────────────────
+PAPER       = "#f4f0e6"   # warm cream page bg
+PAPER_HI    = "#fbf8ef"   # slightly warmer card surface
+INK         = "#1a1614"   # warm near-black
+INK_SOFT    = "#3d3733"
+INK_MUTE    = "#7a716a"
+RULE        = "#d8cfbd"   # hairline color (paper)
+ACCENT      = "#c2410c"   # warm amber, VU-meter peak
+ACCENT_HOT  = "#9a3412"
+ACCENT_TINT = "rgba(194, 65, 12, 0.10)"
+PEAK        = "#dc2626"   # full red, danger only
 
-QSS = """
-* {
-  font-family: -apple-system, "SF Pro Text", "SF Pro Display", "Segoe UI Variable",
-               "Segoe UI", system-ui, sans-serif;
-  color: #0a0a0a;
-}
+DARK_PAPER  = "#13110f"
+DARK_HI     = "#1c1815"
+DARK_INK    = "#f4f0e6"
+DARK_MUTE   = "#8a807a"
+DARK_RULE   = "#33302c"
 
-/* Surface levels (light mode):
-   L0 page bg     #f7f7f8
-   L1 card        #ffffff
-   L2 button/input on card  #f4f4f5  (zinc-100)
-   L3 hover       #e4e4e7  (zinc-200)
-   L4 pressed     #d4d4d8  (zinc-300)
-   accent         #dc2626  (red-600)
-*/
+# resolved at runtime
+def _serif() -> str:
+    return '"Iowan Old Style", "Charter", "Georgia", "Cambria", serif'
 
-QMainWindow, #Root { background: #f7f7f8; }
+def _mono() -> str:
+    return '"SF Mono", "Menlo", "JetBrains Mono", "Cascadia Mono", "Consolas", monospace'
 
-#Sidebar {
-  background: #f1f1f3;
-  border-right: 1px solid #e4e4e7;
-}
-#SidebarBrand { padding: 22px 18px 14px 18px; }
-#SidebarBrandText { font-size: 17px; font-weight: 700; color: #0a0a0a; letter-spacing: -0.01em; }
-#SidebarBrandDot {
-  background: """ + ACCENT + """;
-  border-radius: 6px;
-  min-width: 12px; min-height: 12px;
-  max-width: 12px; max-height: 12px;
-}
-#SidebarSection {
-  color: #71717a;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.10em;
-  padding: 14px 22px 6px 22px;
-  text-transform: uppercase;
-}
-
-QListWidget#NavList {
-  background: transparent;
-  border: none;
-  outline: 0;
-  font-size: 13px;
-}
-QListWidget#NavList::item {
-  padding: 8px 14px;
-  border-radius: 8px;
-  margin: 1px 10px;
-  color: #27272a;
-}
-QListWidget#NavList::item:selected {
-  background: #ffffff;
-  color: #0a0a0a;
-  font-weight: 600;
-  border: 1px solid #e4e4e7;
-}
-QListWidget#NavList::item:hover:!selected {
-  background: rgba(255, 255, 255, 0.55);
-}
-
-#VersionFooter {
-  color: #a1a1aa;
-  font-size: 10px;
-  padding: 12px 22px;
-  letter-spacing: 0.04em;
-}
-
-#PageHeader {
-  padding: 28px 36px 20px 36px;
-  background: transparent;
-  border-bottom: 1px solid #e4e4e7;
-}
-QLabel#PageTitle {
-  font-size: 24px;
-  font-weight: 700;
-  color: #09090b;
-  letter-spacing: -0.02em;
-}
-QLabel#PageSub {
-  font-size: 13px;
-  color: #71717a;
-  margin-top: 2px;
-}
-
-#PageBody { background: transparent; }
-
-QFrame#Row { border-bottom: 1px solid #ececee; background: transparent; }
-QLabel#RowTitle { font-size: 13.5px; font-weight: 600; color: #18181b; }
-QLabel#RowDesc  { font-size: 12px; color: #71717a; }
-
-/* Inputs sit on the page bg (no card wrapper now) — solid white with
-   a slightly stronger border so they read as input affordances. */
-QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit {
-  background: #ffffff;
-  border: 1px solid #d4d4d8;
-  border-radius: 8px;
-  padding: 7px 11px;
-  selection-background-color: """ + ACCENT + """;
-  font-size: 13px;
-  color: #09090b;
-}
-QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover,
-QPlainTextEdit:hover { border-color: #a1a1aa; }
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus,
-QPlainTextEdit:focus {
-  border-color: """ + ACCENT + """;
-  background: #ffffff;
-}
-QComboBox::drop-down { border: 0; width: 22px; }
-
-/* Default button = filled tonal. Visible against both the page bg
-   AND on white cards, no contrast collapse. */
-QPushButton {
-  background: #f4f4f5;
-  border: 1px solid #e4e4e7;
-  border-radius: 8px;
-  padding: 8px 14px;
-  color: #18181b;
-  font-size: 13px;
-  font-weight: 500;
-}
-QPushButton:hover { background: #e4e4e7; border-color: #d4d4d8; }
-QPushButton:pressed { background: #d4d4d8; }
-QPushButton:disabled { color: #a1a1aa; background: #f4f4f5; border-color: #e4e4e7; }
-
-QPushButton#Primary {
-  background: """ + ACCENT + """;
-  color: #ffffff;
-  border: 1px solid """ + ACCENT_HOVER + """;
-  font-weight: 600;
-}
-QPushButton#Primary:hover { background: """ + ACCENT_HOVER + """; }
-QPushButton#Primary:pressed { background: #991b1b; }
-
-QPushButton#Ghost {
-  background: transparent;
-  border: 1px solid transparent;
-  color: """ + ACCENT + """;
-  font-weight: 600;
-}
-QPushButton#Ghost:hover { background: """ + ACCENT_TINT + """; }
-
-QListWidget#History {
-  background: #ffffff;
-  border: 1px solid #e4e4e7;
-  border-radius: 12px;
-  outline: 0;
-  padding: 4px;
-}
-QListWidget#History::item {
-  background: transparent;
-  border-bottom: 1px solid #f4f4f5;
-  border-radius: 0;
-  margin: 0;
-  padding: 12px 14px;
-  color: #18181b;
-}
-QListWidget#History::item:hover { background: #fafafa; }
-QListWidget#History::item:selected {
-  background: """ + ACCENT_TINT + """;
-  color: #18181b;
-}
-
-QCheckBox { color: #18181b; font-size: 13px; spacing: 8px; }
-QCheckBox::indicator {
-  width: 18px; height: 18px;
-  border: 1px solid #d4d4d8; border-radius: 5px; background: white;
-}
-QCheckBox::indicator:hover { border-color: #a1a1aa; }
-QCheckBox::indicator:checked {
-  background: """ + ACCENT + """;
-  border-color: """ + ACCENT_HOVER + """;
-  image: none;
-}
-
-QScrollBar:vertical {
-  background: transparent; width: 10px; margin: 4px 2px 4px 0;
-}
-QScrollBar::handle:vertical {
-  background: rgba(0,0,0,0.16); border-radius: 4px; min-height: 32px;
-}
-QScrollBar::handle:vertical:hover { background: rgba(0,0,0,0.26); }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
-
-#Hero {
-  background: #ffffff;
-  border: 1px solid #e4e4e7;
-  border-radius: 18px;
-}
-#HeroHint  { color: #71717a; font-size: 13px; }
-#HeroHotkey {
-  background: #18181b;
-  color: #fafafa;
-  border: 1px solid #27272a;
-  border-radius: 14px;
-  padding: 16px 24px;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-#HeroLast  { color: #a1a1aa; font-size: 11px; font-weight: 600;
-             letter-spacing: 0.10em; text-transform: uppercase; }
-#HeroLastText { color: #18181b; font-size: 14px; line-height: 22px; }
-
-#LastBox {
-  background: #ffffff;
-  border: 1px solid #e4e4e7;
-  border-radius: 14px;
-}
-
-#TipBox {
-  background: #fafafa;
-  border: 1px solid #e4e4e7;
-  border-radius: 10px;
-  color: #3f3f46;
-}
-"""
-
-QSS_DARK = """
-* { color: #f4f4f5; }
-QMainWindow, #Root { background: #09090b; }
-
-#Sidebar { background: #111114; border-right-color: #1f1f23; }
-#SidebarBrandText { color: #fafafa; }
-#SidebarSection { color: #71717a; }
-QListWidget#NavList::item { color: #d4d4d8; }
-QListWidget#NavList::item:selected {
-  background: #18181b; color: #fafafa; border: 1px solid #27272a;
-}
-QListWidget#NavList::item:hover:!selected { background: rgba(255,255,255,0.03); }
-#VersionFooter { color: #52525b; }
-
-#PageHeader { border-bottom-color: #1f1f23; }
-QLabel#PageTitle { color: #fafafa; }
-QLabel#PageSub  { color: #a1a1aa; }
-QFrame#Row { border-bottom-color: #1f1f23; }
-QLabel#RowTitle { color: #f4f4f5; }
-QLabel#RowDesc { color: #a1a1aa; }
-
-QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit {
-  background: #18181b; border-color: #27272a; color: #fafafa;
-}
-QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover,
-QPlainTextEdit:hover { border-color: #3f3f46; }
-
-QPushButton {
-  background: #1f1f23; color: #fafafa; border-color: #2e2e33;
-}
-QPushButton:hover { background: #2a2a2e; border-color: #3f3f46; }
-QPushButton:pressed { background: #3f3f46; }
-
-QListWidget#History { background: #111114; border-color: #27272a; }
-QListWidget#History::item { color: #fafafa; border-bottom-color: #1f1f23; }
-QListWidget#History::item:hover { background: #18181b; }
-
-QCheckBox { color: #fafafa; }
-QCheckBox::indicator { background: #18181b; border-color: #3f3f46; }
-
-#Hero { background: #18181b; border-color: #27272a; }
-#HeroHotkey { background: #09090b; color: #fafafa; border-color: #27272a; }
-#HeroHint { color: #a1a1aa; }
-#HeroLast { color: #71717a; }
-#HeroLastText { color: #fafafa; }
-#LastBox { background: #18181b; border-color: #27272a; }
-#TipBox { background: #18181b; border-color: #27272a; color: #d4d4d8; }
-"""
-
-NAV_ITEMS = [
-    ("home",        "Inicio",     "home"),
-    ("general",     "General",    "settings"),
-    ("permissions", "Permisos",   "shield"),
-    ("whisper",     "Whisper",    "mic"),
-    ("ollama",      "Ollama",     "spark"),
-    ("prompt",      "Prompt",     "text"),
-    ("history",     "Historial",  "clock"),
-]
-
-STATE_TEXT = {
-    "idle":       ("Listo",      "Mantén la tecla configurada para grabar"),
-    "recording":  ("Grabando",   "Habla — al soltar la tecla se transcribe"),
-    "processing": ("Procesando", "Whisper + Ollama trabajando"),
-    "error":      ("Error",      "Revisa los logs para detalles"),
-}
-
-STATE_DOT_COLOR = {
-    "idle": "#10b981",
-    "recording": ACCENT,
-    "processing": "#f59e0b",
-    "error": ACCENT,
-}
+def _sans() -> str:
+    return '-apple-system, "SF Pro Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif'
 
 
 def _is_dark_mode() -> bool:
     if sys.platform == "darwin":
         try:
-            import subprocess
             r = subprocess.run(
                 ["defaults", "read", "-g", "AppleInterfaceStyle"],
                 capture_output=True, text=True, timeout=1,
@@ -363,6 +91,364 @@ def _is_dark_mode() -> bool:
     return False
 
 
+def QSS_LIGHT() -> str:
+    return f"""
+* {{ font-family: {_sans()}; color: {INK}; }}
+
+QMainWindow, #Root {{ background: {PAPER}; }}
+
+/* ── sidebar ───────────────────────────────────────────────────────── */
+#Sidebar {{
+  background: {PAPER};
+  border-right: 1px solid {RULE};
+}}
+#SidebarBrand {{
+  font-family: {_serif()};
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 500;
+  color: {INK};
+  padding: 28px 24px 4px 24px;
+  letter-spacing: -0.01em;
+}}
+#SidebarTagline {{
+  font-family: {_mono()};
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: {INK_MUTE};
+  padding: 0 24px 22px 24px;
+  text-transform: uppercase;
+}}
+#SidebarSection {{
+  font-family: {_mono()};
+  color: {INK_MUTE};
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.20em;
+  padding: 12px 24px 8px 24px;
+  text-transform: uppercase;
+}}
+QListWidget#NavList {{
+  background: transparent;
+  border: none;
+  outline: 0;
+}}
+QListWidget#NavList::item {{
+  padding: 7px 14px 7px 24px;
+  margin: 0;
+  color: {INK_SOFT};
+  border-left: 2px solid transparent;
+  font-family: {_mono()};
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}}
+QListWidget#NavList::item:selected {{
+  color: {INK};
+  border-left-color: {ACCENT};
+  background: rgba(255,255,255,0.55);
+  font-weight: 600;
+}}
+QListWidget#NavList::item:hover:!selected {{
+  color: {INK};
+  background: rgba(0,0,0,0.025);
+}}
+#VersionFooter {{
+  font-family: {_mono()};
+  color: {INK_MUTE};
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  padding: 14px 24px 18px 24px;
+  text-transform: uppercase;
+}}
+
+/* ── page header ───────────────────────────────────────────────────── */
+#PageHeader {{ background: transparent; border-bottom: 1px solid {RULE}; }}
+QLabel#PageEyebrow {{
+  font-family: {_mono()};
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: {INK_MUTE};
+  text-transform: uppercase;
+}}
+QLabel#PageTitle {{
+  font-family: {_serif()};
+  font-size: 32px;
+  font-style: italic;
+  font-weight: 500;
+  color: {INK};
+  letter-spacing: -0.015em;
+}}
+QLabel#PageSub {{
+  font-family: {_serif()};
+  font-size: 14px;
+  font-style: italic;
+  color: {INK_MUTE};
+}}
+
+/* ── settings rows ─────────────────────────────────────────────────── */
+QFrame#Row {{ border-bottom: 1px solid {RULE}; background: transparent; }}
+QLabel#RowIndex {{
+  font-family: {_mono()};
+  font-size: 11px;
+  color: {INK_MUTE};
+  letter-spacing: 0.10em;
+  font-weight: 600;
+}}
+QLabel#RowTitle {{
+  font-family: {_serif()};
+  font-size: 16px;
+  color: {INK};
+}}
+QLabel#RowDesc {{
+  font-family: {_mono()};
+  font-size: 11px;
+  color: {INK_MUTE};
+  letter-spacing: 0.01em;
+}}
+
+/* ── inputs ────────────────────────────────────────────────────────── */
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit {{
+  background: {PAPER_HI};
+  border: 1px solid {RULE};
+  border-radius: 4px;
+  padding: 8px 12px;
+  selection-background-color: {ACCENT};
+  selection-color: white;
+  font-family: {_mono()};
+  font-size: 12px;
+  color: {INK};
+}}
+QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover,
+QPlainTextEdit:hover {{ border-color: {INK_SOFT}; }}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus,
+QPlainTextEdit:focus {{
+  border-color: {ACCENT};
+  background: white;
+}}
+QComboBox::drop-down {{ border: 0; width: 22px; }}
+QComboBox::down-arrow {{
+  width: 8px; height: 8px;
+}}
+
+/* ── buttons ───────────────────────────────────────────────────────── */
+QPushButton {{
+  background: {PAPER_HI};
+  border: 1px solid {RULE};
+  border-radius: 4px;
+  padding: 9px 16px;
+  color: {INK};
+  font-family: {_mono()};
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}}
+QPushButton:hover {{
+  background: white;
+  border-color: {INK_SOFT};
+}}
+QPushButton:pressed {{ background: {RULE}; }}
+QPushButton:disabled {{
+  color: {INK_MUTE};
+  background: {PAPER_HI};
+  border-color: {RULE};
+}}
+
+QPushButton#Primary {{
+  background: {INK};
+  color: {PAPER};
+  border: 1px solid {INK};
+}}
+QPushButton#Primary:hover {{
+  background: {ACCENT};
+  border-color: {ACCENT_HOT};
+}}
+QPushButton#Primary:pressed {{ background: {ACCENT_HOT}; }}
+
+QPushButton#Accent {{
+  background: {ACCENT};
+  color: white;
+  border: 1px solid {ACCENT_HOT};
+}}
+QPushButton#Accent:hover {{ background: {ACCENT_HOT}; }}
+
+QPushButton#Ghost {{
+  background: transparent;
+  border: 1px solid transparent;
+  color: {ACCENT};
+}}
+QPushButton#Ghost:hover {{ background: {ACCENT_TINT}; }}
+
+/* ── checkboxes ────────────────────────────────────────────────────── */
+QCheckBox {{ color: {INK}; font-family: {_mono()}; font-size: 11px; spacing: 10px; }}
+QCheckBox::indicator {{
+  width: 16px; height: 16px;
+  border: 1px solid {INK_MUTE}; border-radius: 3px;
+  background: {PAPER_HI};
+}}
+QCheckBox::indicator:hover {{ border-color: {INK}; }}
+QCheckBox::indicator:checked {{
+  background: {INK};
+  border-color: {INK};
+  image: none;
+}}
+
+/* ── history list ──────────────────────────────────────────────────── */
+QListWidget#History {{
+  background: {PAPER_HI};
+  border: 1px solid {RULE};
+  border-radius: 8px;
+  outline: 0;
+  padding: 0;
+}}
+QListWidget#History::item {{
+  background: transparent;
+  border-bottom: 1px solid {RULE};
+  border-radius: 0;
+  padding: 14px 18px;
+  color: {INK};
+  font-family: {_serif()};
+  font-size: 13px;
+}}
+QListWidget#History::item:hover {{ background: rgba(0,0,0,0.02); }}
+QListWidget#History::item:selected {{
+  background: {ACCENT_TINT};
+  color: {INK};
+}}
+
+/* ── scrollbar ─────────────────────────────────────────────────────── */
+QScrollBar:vertical {{
+  background: transparent; width: 10px; margin: 4px 2px 4px 0;
+}}
+QScrollBar::handle:vertical {{
+  background: rgba(26,22,20,0.18); border-radius: 4px; min-height: 32px;
+}}
+QScrollBar::handle:vertical:hover {{ background: rgba(26,22,20,0.32); }}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+
+/* ── hero ──────────────────────────────────────────────────────────── */
+#HeroFrame {{ background: transparent; }}
+QLabel#HeroEyebrow {{
+  font-family: {_mono()};
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  font-weight: 600;
+  color: {INK_MUTE};
+  text-transform: uppercase;
+}}
+QLabel#HeroTitle {{
+  font-family: {_serif()};
+  font-size: 56px;
+  font-style: italic;
+  font-weight: 500;
+  color: {INK};
+  letter-spacing: -0.025em;
+  line-height: 1;
+}}
+QLabel#HeroLead {{
+  font-family: {_serif()};
+  font-size: 17px;
+  font-style: italic;
+  color: {INK_SOFT};
+  line-height: 26px;
+}}
+#HeroHotkeyBox {{
+  background: {INK};
+  border: 1px solid {INK};
+  border-radius: 8px;
+}}
+QLabel#HeroHotkeyLabel {{
+  font-family: {_mono()};
+  font-size: 9px;
+  color: rgba(244,240,230,0.55);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}}
+QLabel#HeroHotkeyValue {{
+  font-family: {_serif()};
+  font-style: italic;
+  font-size: 28px;
+  color: {PAPER};
+  letter-spacing: -0.01em;
+}}
+QLabel#HeroMetric {{
+  font-family: {_mono()};
+  font-size: 9px;
+  color: {INK_MUTE};
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}}
+
+#LastBox {{
+  background: {PAPER_HI};
+  border: 1px solid {RULE};
+  border-radius: 8px;
+}}
+QLabel#LastEyebrow {{
+  font-family: {_mono()};
+  font-size: 10px;
+  color: {INK_MUTE};
+  letter-spacing: 0.20em;
+  font-weight: 600;
+  text-transform: uppercase;
+}}
+QLabel#LastText {{
+  font-family: {_serif()};
+  font-style: italic;
+  font-size: 16px;
+  color: {INK};
+  line-height: 24px;
+}}
+
+/* ── tip / status ──────────────────────────────────────────────────── */
+#TipBox {{
+  background: {PAPER_HI};
+  border: 1px solid {RULE};
+  border-radius: 6px;
+  font-family: {_mono()};
+  font-size: 11px;
+  color: {INK_SOFT};
+}}
+"""
+
+
+def QSS_DARK() -> str:
+    return QSS_LIGHT().replace(PAPER, DARK_PAPER).replace(PAPER_HI, DARK_HI) \
+        .replace(INK_SOFT, DARK_INK).replace(INK_MUTE, DARK_MUTE) \
+        .replace(RULE, DARK_RULE).replace(INK, DARK_INK)
+
+
+# ─── data ───────────────────────────────────────────────────────────────────
+
+NAV_ITEMS = [
+    ("home",        "INICIO"),
+    ("general",     "GENERAL"),
+    ("permissions", "PERMISOS"),
+    ("whisper",     "WHISPER"),
+    ("ollama",      "OLLAMA"),
+    ("prompt",      "PROMPT"),
+    ("history",     "HISTORIAL"),
+]
+
+STATE_TEXT = {
+    "idle":       "READY",
+    "recording":  "REC",
+    "processing": "PROCESSING",
+    "error":      "ERROR",
+}
+
+STATE_DOT_COLOR = {
+    "idle": "#10b981",
+    "recording": ACCENT,
+    "processing": "#d97706",
+    "error": PEAK,
+}
+
+
+# ── hotkey ─────────────────────────────────────────────────────────────────
 _MAC_VK_TO_NAME = {
     61: "right_option", 58: "left_option",
     54: "cmd_r", 55: "cmd_l",
@@ -370,7 +456,6 @@ _MAC_VK_TO_NAME = {
     60: "shift_r", 56: "shift_l",
     63: "fn",
 }
-
 _WIN_VK_TO_NAME = {
     0xA5: "right_option", 0xA4: "left_option",
     0xA3: "ctrl_r", 0xA2: "ctrl_l",
@@ -421,12 +506,12 @@ def _spec_pretty(spec: str) -> str:
         return "—"
     parts = [p.strip("<> ") for p in spec.split("+")]
     label_map = {
-        "right_option": "⌥ Right", "left_option": "⌥ Left", "alt": "⌥",
-        "cmd": "⌘", "cmd_l": "⌘ Left", "cmd_r": "⌘ Right",
-        "ctrl": "⌃", "ctrl_l": "⌃ Left", "ctrl_r": "⌃ Right",
-        "shift": "⇧", "shift_l": "⇧ Left", "shift_r": "⇧ Right",
+        "right_option": "⌥R", "left_option": "⌥L", "alt": "⌥",
+        "cmd": "⌘", "cmd_l": "⌘L", "cmd_r": "⌘R",
+        "ctrl": "⌃", "ctrl_l": "⌃L", "ctrl_r": "⌃R",
+        "shift": "⇧", "shift_l": "⇧L", "shift_r": "⇧R",
         "space": "Space", "tab": "Tab", "esc": "Esc",
-        "caps_lock": "Caps Lock", "fn": "Fn",
+        "caps_lock": "Caps", "fn": "Fn",
     }
     out = []
     for p in parts:
@@ -436,7 +521,7 @@ def _spec_pretty(spec: str) -> str:
             out.append(p.upper())
         else:
             out.append(p.upper())
-    return " + ".join(out)
+    return " · ".join(out)
 
 
 class HotkeyRecorder(QPushButton):
@@ -446,7 +531,7 @@ class HotkeyRecorder(QPushButton):
         super().__init__()
         self._spec = current
         self._recording = False
-        self.setMinimumHeight(38)
+        self.setMinimumHeight(40)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.clicked.connect(self._toggle)
         self._update()
@@ -470,13 +555,15 @@ class HotkeyRecorder(QPushButton):
 
     def _update(self) -> None:
         if self._recording:
-            self.setText("Presiona una tecla…   (Esc para cancelar)")
+            self.setText("PRESIONA UNA TECLA · ESC PARA CANCELAR")
             self.setStyleSheet(
-                "QPushButton { background:" + ACCENT_TINT + "; border:1px solid " + ACCENT
-                + "; border-radius:8px; padding:8px 14px; font-weight:600; color:" + ACCENT + "; }"
+                f"QPushButton {{ background:{ACCENT_TINT}; border:1px solid {ACCENT}; "
+                f"color:{ACCENT}; border-radius:4px; padding:9px 16px; "
+                f"font-family:{_mono()}; font-size:10px; font-weight:700; "
+                f"letter-spacing:0.14em; }}"
             )
         else:
-            self.setText(_spec_pretty(self._spec))
+            self.setText(_spec_pretty(self._spec).upper())
             self.setStyleSheet("")
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
@@ -508,10 +595,13 @@ class HotkeyRecorder(QPushButton):
         self.captured.emit(spec)
 
 
+# ─── decorations ────────────────────────────────────────────────────────────
+
 class StatusDot(QWidget):
-    def __init__(self) -> None:
+    def __init__(self, size: int = 10) -> None:
         super().__init__()
-        self.setFixedSize(12, 12)
+        self.setFixedSize(size, size)
+        self._size = size
         self._color = QColor(STATE_DOT_COLOR["idle"])
         self._pulse = 0.0
         self._direction = 1.0
@@ -530,11 +620,11 @@ class StatusDot(QWidget):
     def _tick(self) -> None:
         self._pulse += 0.07 * self._direction
         if self._pulse >= 1.0:
-            self._pulse = 1.0
             self._direction = -1.0
+            self._pulse = 1.0
         elif self._pulse <= 0.0:
-            self._pulse = 0.0
             self._direction = 1.0
+            self._pulse = 0.0
         self.update()
 
     def paintEvent(self, _event) -> None:
@@ -542,7 +632,7 @@ class StatusDot(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         if self._timer.isActive():
             halo = QColor(self._color)
-            halo.setAlphaF(0.30 * self._pulse)
+            halo.setAlphaF(0.25 * self._pulse)
             p.setBrush(halo)
             p.setPen(Qt.PenStyle.NoPen)
             p.drawEllipse(self.rect())
@@ -551,71 +641,109 @@ class StatusDot(QWidget):
         p.drawEllipse(self.rect().adjusted(2, 2, -2, -2))
 
 
-class WaveformView(QWidget):
+class VuMeter(QWidget):
+    """VU-style waveform with dB tick marks. Bars warm-amber, peaks shift red."""
+
     def __init__(self) -> None:
         super().__init__()
-        self.setMinimumHeight(72)
+        self.setMinimumHeight(64)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._levels: list[float] = [0.0] * 64
+        self._levels: list[float] = [0.0] * 56
         self._active = False
 
     def push(self, peak: float) -> None:
-        self._levels.append(min(1.0, peak * 6.0))
-        if len(self._levels) > 64:
-            self._levels = self._levels[-64:]
+        self._levels.append(min(1.0, peak * 6.5))
+        if len(self._levels) > 56:
+            self._levels = self._levels[-56:]
         self.update()
 
     def set_active(self, active: bool) -> None:
         self._active = active
         if not active:
-            self._levels = [0.0] * 64
+            self._levels = [0.0] * 56
         self.update()
 
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         w, h = self.width(), self.height()
-        bar_w = max(3, w // len(self._levels) - 3)
-        gap = 3
-        total = len(self._levels) * (bar_w + gap)
-        x = (w - total) // 2
+        # tick marks at -30, -20, -10, -3 dB (informational, not data-true)
+        rule_color = QColor(INK_MUTE)
+        rule_color.setAlphaF(0.35)
+        p.setPen(QPen(rule_color, 1, Qt.PenStyle.SolidLine))
+        font = QFont("Menlo", 7)
+        font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 110)
+        p.setFont(font)
+        for frac, label in ((0.65, "-30"), (0.40, "-20"), (0.18, "-10"), (0.04, "-3")):
+            y = int(h / 2 + frac * (h / 2))
+            p.drawLine(8, y, w - 30, y)
+            p.drawText(w - 26, y + 3, f"{label}dB")
+
+        # bars
+        n = len(self._levels)
+        bar_w = max(2, (w - 80) // n - 2)
+        gap = 2
+        total = n * (bar_w + gap)
+        x = (w - 80 - total) // 2 + 8
         cy = h / 2
-        color = QColor(ACCENT) if self._active else QColor("#cfcfd2")
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(color)
         for level in self._levels:
-            bar_h = max(4, int(level * (h - 12)))
-            p.drawRoundedRect(x, int(cy - bar_h / 2), bar_w, bar_h, 2, 2)
+            bar_h = max(3, int(level * (h - 14)))
+            color = QColor(ACCENT) if self._active else QColor("#bcb1a0")
+            if level > 0.85:
+                color = QColor(PEAK)
+            p.setBrush(color)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(x, int(cy - bar_h / 2), bar_w, bar_h, 1, 1)
             x += bar_w + gap
 
 
-def _page_header(title: str, subtitle: str) -> QWidget:
+# ─── building blocks ────────────────────────────────────────────────────────
+
+def _scrollable(content: QWidget) -> QScrollArea:
+    sa = QScrollArea()
+    sa.setWidget(content)
+    sa.setWidgetResizable(True)
+    sa.setFrameShape(QFrame.Shape.NoFrame)
+    sa.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+    sa.viewport().setStyleSheet("background: transparent;")
+    return sa
+
+
+def _page_header(eyebrow: str, title: str, subtitle: str) -> QWidget:
     w = QFrame()
     w.setObjectName("PageHeader")
     layout = QVBoxLayout(w)
-    layout.setContentsMargins(36, 28, 36, 20)
-    layout.setSpacing(2)
+    layout.setContentsMargins(48, 36, 48, 22)
+    layout.setSpacing(8)
+    e = QLabel(eyebrow)
+    e.setObjectName("PageEyebrow")
+    layout.addWidget(e)
     t = QLabel(title)
     t.setObjectName("PageTitle")
+    layout.addWidget(t)
     s = QLabel(subtitle)
     s.setObjectName("PageSub")
-    layout.addWidget(t)
+    s.setWordWrap(True)
     layout.addWidget(s)
     return w
 
 
-def _row(title: str, description: str | None, control: QWidget,
+def _row(index: str, title: str, description: str | None, control: QWidget,
          extra_controls: list[QWidget] | None = None) -> QFrame:
-    """Linear-style settings row: title + description on the left,
-    control(s) flush-right, separated by a hairline divider."""
     row = QFrame()
     row.setObjectName("Row")
     layout = QHBoxLayout(row)
-    layout.setContentsMargins(36, 14, 36, 14)
+    layout.setContentsMargins(48, 18, 48, 18)
     layout.setSpacing(20)
 
+    idx = QLabel(index)
+    idx.setObjectName("RowIndex")
+    idx.setFixedWidth(36)
+    idx.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+    layout.addWidget(idx, 0)
+
     text_col = QVBoxLayout()
-    text_col.setSpacing(2)
+    text_col.setSpacing(3)
     t = QLabel(title)
     t.setObjectName("RowTitle")
     text_col.addWidget(t)
@@ -626,8 +754,7 @@ def _row(title: str, description: str | None, control: QWidget,
         text_col.addWidget(d)
     layout.addLayout(text_col, 1)
 
-    control.setMinimumWidth(180)
-    control.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+    control.setMinimumWidth(220)
     layout.addWidget(control)
     if extra_controls:
         for c in extra_controls:
@@ -637,126 +764,138 @@ def _row(title: str, description: str | None, control: QWidget,
 
 def _save_bar(on_save: Callable[[], None]) -> QWidget:
     bar = QFrame()
-    bar.setStyleSheet("background: transparent;")
+    bar.setStyleSheet(f"background: transparent; border-top: 1px solid {RULE};")
     h = QHBoxLayout(bar)
-    h.setContentsMargins(36, 16, 36, 28)
+    h.setContentsMargins(48, 18, 48, 24)
     h.addStretch(1)
-    btn = QPushButton("Guardar cambios")
+    btn = QPushButton("GUARDAR CAMBIOS")
     btn.setObjectName("Primary")
     btn.clicked.connect(on_save)
     h.addWidget(btn)
     return bar
 
 
-def _scrollable(content: QWidget) -> QWidget:
-    from PySide6.QtWidgets import QScrollArea
-    sa = QScrollArea()
-    sa.setWidget(content)
-    sa.setWidgetResizable(True)
-    sa.setFrameShape(QFrame.Shape.NoFrame)
-    sa.setStyleSheet("QScrollArea { background: transparent; }")
-    return sa
-
-
-_PILL_STYLES = {
-    "idle":       ("color:#15803d; background:rgba(16,185,129,0.14);"),
-    "recording":  ("color:" + ACCENT + "; background:rgba(220,38,38,0.14);"),
-    "processing": ("color:#b45309; background:rgba(245,158,11,0.18);"),
-    "error":      ("color:" + ACCENT + "; background:rgba(220,38,38,0.14);"),
-}
-
+# ─── pages ─────────────────────────────────────────────────────────────────
 
 class HomePage(QWidget):
     def __init__(self, cfg: Config) -> None:
         super().__init__()
         self._cfg = cfg
         wrap = QVBoxLayout(self)
-        wrap.setContentsMargins(36, 28, 36, 36)
-        wrap.setSpacing(18)
+        wrap.setContentsMargins(48, 40, 48, 40)
+        wrap.setSpacing(28)
 
-        hero = QFrame()
-        hero.setObjectName("Hero")
-        shadow = QGraphicsDropShadowEffect(hero)
-        shadow.setBlurRadius(28)
-        shadow.setOffset(0, 6)
-        shadow.setColor(QColor(15, 23, 42, 18))
-        hero.setGraphicsEffect(shadow)
+        # eyebrow with status dot
+        eye_row = QHBoxLayout()
+        eye_row.setSpacing(10)
+        self.dot = StatusDot(size=10)
+        eye_row.addWidget(self.dot, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.eyebrow = QLabel("READY · IDLE")
+        self.eyebrow.setObjectName("HeroEyebrow")
+        eye_row.addWidget(self.eyebrow, 0, Qt.AlignmentFlag.AlignVCenter)
+        eye_row.addStretch(1)
+        wrap.addLayout(eye_row)
 
-        h = QVBoxLayout(hero)
-        h.setSpacing(20)
-        h.setContentsMargins(36, 32, 36, 32)
+        # editorial pull
+        title = QLabel("Speak.\nIt prints.")
+        title.setObjectName("HeroTitle")
+        title.setTextFormat(Qt.TextFormat.PlainText)
+        wrap.addWidget(title)
 
-        pill_row = QHBoxLayout()
-        pill_row.setSpacing(10)
-        self.dot = StatusDot()
-        pill_row.addWidget(self.dot, 0, Qt.AlignmentFlag.AlignVCenter)
-        self.status_pill = QLabel("Listo")
-        self.status_pill.setObjectName("HeroPill")
-        pill_row.addWidget(self.status_pill, 0, Qt.AlignmentFlag.AlignVCenter)
-        pill_row.addStretch(1)
-        h.addLayout(pill_row)
-
-        self._title = QLabel("Mantén la tecla y habla")
-        self._title.setStyleSheet(
-            "font-size:28px; font-weight:700; letter-spacing:-0.02em; color:#09090b;"
+        lead = QLabel(
+            "voxless transcribes locally with Whisper, polishes with Ollama, "
+            "and types the result wherever your cursor sits — silent, private, offline."
         )
-        h.addWidget(self._title)
+        lead.setObjectName("HeroLead")
+        lead.setWordWrap(True)
+        wrap.addWidget(lead)
 
-        sub = QLabel(
-            "voxless transcribe localmente con Whisper y limpia el texto con Ollama. "
-            "Privado, rápido, offline."
+        # hotkey panel
+        hk = QFrame()
+        hk.setObjectName("HeroHotkeyBox")
+        hk_l = QHBoxLayout(hk)
+        hk_l.setContentsMargins(28, 22, 28, 22)
+        hk_l.setSpacing(28)
+        meta_col = QVBoxLayout()
+        meta_col.setSpacing(2)
+        meta_lbl = QLabel("HOLD")
+        meta_lbl.setObjectName("HeroHotkeyLabel")
+        meta_col.addWidget(meta_lbl)
+        self.hotkey_value = QLabel(_spec_pretty(cfg.hotkey))
+        self.hotkey_value.setObjectName("HeroHotkeyValue")
+        meta_col.addWidget(self.hotkey_value)
+        hk_l.addLayout(meta_col, 0)
+        hk_l.addStretch(1)
+        # mode marker on the right
+        mode_col = QVBoxLayout()
+        mode_col.setSpacing(2)
+        mode_label = QLabel("MODE")
+        mode_label.setObjectName("HeroHotkeyLabel")
+        mode_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        mode_col.addWidget(mode_label)
+        self.mode_value = QLabel("PUSH-TO-TALK" if cfg.hotkey_mode == "hold" else "TAP-TO-TOGGLE")
+        self.mode_value.setStyleSheet(
+            f"font-family:{_mono()}; font-size:13px; color:{PAPER}; "
+            f"letter-spacing:0.18em; font-weight:600;"
         )
-        sub.setObjectName("HeroHint")
-        sub.setWordWrap(True)
-        h.addWidget(sub)
+        self.mode_value.setAlignment(Qt.AlignmentFlag.AlignRight)
+        mode_col.addWidget(self.mode_value)
+        hk_l.addLayout(mode_col, 0)
+        wrap.addWidget(hk)
 
-        hk_row = QHBoxLayout()
-        self.hotkey_label = QLabel(_spec_pretty(cfg.hotkey))
-        self.hotkey_label.setObjectName("HeroHotkey")
-        hk_row.addWidget(self.hotkey_label)
-        hk_row.addStretch(1)
-        h.addLayout(hk_row)
+        # vu meter
+        meter_row = QHBoxLayout()
+        m1 = QLabel("LEVEL")
+        m1.setObjectName("HeroMetric")
+        meter_row.addWidget(m1)
+        meter_row.addStretch(1)
+        m2 = QLabel("16 kHz · MONO")
+        m2.setObjectName("HeroMetric")
+        meter_row.addWidget(m2)
+        wrap.addLayout(meter_row)
 
-        self.waveform = WaveformView()
-        self.waveform.setMinimumHeight(56)
-        h.addWidget(self.waveform)
+        self.vu = VuMeter()
+        wrap.addWidget(self.vu)
 
-        wrap.addWidget(hero)
-
-        last_box = QFrame()
-        last_box.setObjectName("LastBox")
-        lb = QVBoxLayout(last_box)
-        lb.setContentsMargins(24, 18, 24, 22)
-        lb.setSpacing(6)
-        lt = QLabel("Última transcripción")
-        lt.setObjectName("HeroLast")
-        lb.addWidget(lt)
-        self.last_text = QLabel("Aún no hay transcripciones — graba una para empezar.")
-        self.last_text.setObjectName("HeroLastText")
+        # last transcription
+        last = QFrame()
+        last.setObjectName("LastBox")
+        ll = QVBoxLayout(last)
+        ll.setContentsMargins(24, 18, 24, 22)
+        ll.setSpacing(8)
+        le = QLabel("LAST · WAITING")
+        le.setObjectName("LastEyebrow")
+        ll.addWidget(le)
+        self.last_text = QLabel("— Aún no hay transcripciones. Mantén tu hotkey y empieza.")
+        self.last_text.setObjectName("LastText")
         self.last_text.setWordWrap(True)
-        lb.addWidget(self.last_text)
-        wrap.addWidget(last_box)
+        ll.addWidget(self.last_text)
+        self._last_eyebrow = le
+        wrap.addWidget(last)
 
         wrap.addStretch(1)
-        self._apply_pill("idle")
-
-    def _apply_pill(self, state: str) -> None:
-        base = (
-            "border-radius:999px; padding:6px 14px;"
-            " font-size:12px; font-weight:600; letter-spacing:0.02em;"
-        )
-        color = _PILL_STYLES.get(state, _PILL_STYLES["idle"])
-        self.status_pill.setStyleSheet(color + " " + base)
 
     def set_state(self, state: str) -> None:
-        text, _sub = STATE_TEXT.get(state, STATE_TEXT["idle"])
-        self.status_pill.setText(text)
-        self._apply_pill(state)
+        text = STATE_TEXT.get(state, STATE_TEXT["idle"])
+        if state == "idle":
+            self.eyebrow.setText("READY · IDLE")
+        elif state == "recording":
+            self.eyebrow.setText(f"{text} · LIVE")
+        elif state == "processing":
+            self.eyebrow.setText(f"{text} · WHISPER + OLLAMA")
+        else:
+            self.eyebrow.setText(f"{text}")
         self.dot.set_state(state)
-        self.waveform.set_active(state == "recording")
+        self.vu.set_active(state == "recording")
 
-    def set_hotkey(self, spec: str) -> None:
-        self.hotkey_label.setText(_spec_pretty(spec))
+    def set_hotkey(self, spec: str, mode: str = "hold") -> None:
+        self.hotkey_value.setText(_spec_pretty(spec))
+        self.mode_value.setText("PUSH-TO-TALK" if mode == "hold" else "TAP-TO-TOGGLE")
+
+    def push_history_preview(self, text: str) -> None:
+        ts = datetime.now().strftime("%H:%M")
+        self._last_eyebrow.setText(f"LAST · {ts}")
+        self.last_text.setText("“" + text + "”")
 
 
 class GeneralPage(QWidget):
@@ -768,51 +907,46 @@ class GeneralPage(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        outer.addWidget(_page_header("General", "Hotkey, modo de activación y comportamiento de grabación."))
+        outer.addWidget(_page_header(
+            "§ 02 · WORKSPACE",
+            "General",
+            "Hotkey, modo de activación y comportamiento de grabación.",
+        ))
 
         body = QFrame()
-        body.setObjectName("PageBody")
         bl = QVBoxLayout(body)
         bl.setContentsMargins(0, 0, 0, 0)
         bl.setSpacing(0)
 
         self.hotkey_recorder = HotkeyRecorder(cfg.hotkey)
-        bl.addWidget(_row(
-            "Hotkey",
-            "Click en el botón y presiona la tecla (o combinación) que quieras usar.",
-            self.hotkey_recorder,
-        ))
+        bl.addWidget(_row("01", "Hotkey",
+                          "Click y presiona la tecla — o combinación — que quieres usar.",
+                          self.hotkey_recorder))
 
         self.mode_combo = QComboBox()
-        self.mode_combo.addItem("Mantener presionado (push-to-talk)", "hold")
-        self.mode_combo.addItem("Tap: tocar para iniciar / tocar para terminar", "toggle")
+        self.mode_combo.addItem("Mantener presionado · Push-to-talk", "hold")
+        self.mode_combo.addItem("Tap para iniciar · tap para terminar", "toggle")
         idx = self.mode_combo.findData(cfg.hotkey_mode)
         if idx >= 0:
             self.mode_combo.setCurrentIndex(idx)
-        bl.addWidget(_row(
-            "Modo de activación",
-            "Cómo se controla la grabación con la tecla.",
-            self.mode_combo,
-        ))
+        bl.addWidget(_row("02", "Modo de activación",
+                          "Cómo se controla la grabación con la tecla.",
+                          self.mode_combo))
 
         self.min_ms = QSpinBox()
         self.min_ms.setRange(0, 5000)
         self.min_ms.setSingleStep(50)
         self.min_ms.setSuffix(" ms")
         self.min_ms.setValue(cfg.min_record_ms)
-        bl.addWidget(_row(
-            "Duración mínima",
-            "Grabaciones más cortas se ignoran. Útil para evitar pulsaciones accidentales.",
-            self.min_ms,
-        ))
+        bl.addWidget(_row("03", "Duración mínima",
+                          "Grabaciones más cortas se ignoran. Evita pulsaciones accidentales.",
+                          self.min_ms))
 
-        self.sound = QCheckBox("")
+        self.sound = QCheckBox("ENABLED")
         self.sound.setChecked(cfg.sound_feedback)
-        bl.addWidget(_row(
-            "Sonido al grabar",
-            "Reproducir un click sutil al iniciar y detener.",
-            self.sound,
-        ))
+        bl.addWidget(_row("04", "Sonido al grabar",
+                          "Reproducir un click sutil al iniciar y detener.",
+                          self.sound))
 
         outer.addWidget(_scrollable(body), 1)
         outer.addWidget(_save_bar(self._save))
@@ -834,10 +968,13 @@ class WhisperPage(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        outer.addWidget(_page_header("Whisper", "Modelo local de transcripción (faster-whisper)."))
+        outer.addWidget(_page_header(
+            "§ 04 · TRANSCRIPTION",
+            "Whisper",
+            "Modelo local de transcripción, vía faster-whisper / CTranslate2.",
+        ))
 
         body = QFrame()
-        body.setObjectName("PageBody")
         bl = QVBoxLayout(body)
         bl.setContentsMargins(0, 0, 0, 0)
         bl.setSpacing(0)
@@ -845,27 +982,29 @@ class WhisperPage(QWidget):
         self.model_combo = QComboBox()
         self.model_combo.addItems(["tiny", "base", "small", "medium", "large-v3"])
         self.model_combo.setCurrentText(cfg.whisper.model)
-        bl.addWidget(_row(
-            "Modelo",
-            "Más grande = más exacto, pero más lento. small es buen punto medio.",
-            self.model_combo,
-        ))
+        bl.addWidget(_row("01", "Modelo",
+                          "Más grande = más exacto, más lento. small es el punto medio.",
+                          self.model_combo))
 
         self.lang_edit = QLineEdit(cfg.whisper.language or "")
-        self.lang_edit.setPlaceholderText("auto (vacío) o ej. es, en, fr")
-        bl.addWidget(_row("Idioma", "Vacío para auto-detectar.", self.lang_edit))
+        self.lang_edit.setPlaceholderText("auto · es · en · fr · …")
+        bl.addWidget(_row("02", "Idioma",
+                          "Vacío para auto-detectar.",
+                          self.lang_edit))
 
         self.compute_combo = QComboBox()
         self.compute_combo.addItems(["int8", "int8_float16", "float16", "float32"])
         self.compute_combo.setCurrentText(cfg.whisper.compute_type)
-        bl.addWidget(_row("Precisión",
-                          "int8 funciona bien y es rápido. float16/32 piden GPU.",
+        bl.addWidget(_row("03", "Precisión",
+                          "int8 va bien y rápido. float16/32 piden GPU.",
                           self.compute_combo))
 
         self.device_combo = QComboBox()
         self.device_combo.addItems(["auto", "cpu"])
         self.device_combo.setCurrentText(cfg.whisper.device)
-        bl.addWidget(_row("Device", "auto detecta GPU si está disponible.", self.device_combo))
+        bl.addWidget(_row("04", "Device",
+                          "auto detecta GPU (Metal/CUDA) si está disponible.",
+                          self.device_combo))
 
         outer.addWidget(_scrollable(body), 1)
         outer.addWidget(_save_bar(self._save))
@@ -888,30 +1027,29 @@ class OllamaPage(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        outer.addWidget(_page_header("Ollama", "Modelo local de limpieza de texto."))
+        outer.addWidget(_page_header(
+            "§ 05 · COPYDESK",
+            "Ollama",
+            "Modelo local que limpia y puntúa el texto antes de pegarlo.",
+        ))
 
         body = QFrame()
-        body.setObjectName("PageBody")
         bl = QVBoxLayout(body)
         bl.setContentsMargins(0, 0, 0, 0)
         bl.setSpacing(0)
 
-        self.enabled = QCheckBox("")
+        self.enabled = QCheckBox("ENABLED")
         self.enabled.setChecked(cfg.ollama.enabled)
-        bl.addWidget(_row(
-            "Limpieza con Ollama",
-            "Si lo desactivas, voxless pega el texto crudo de Whisper.",
-            self.enabled,
-        ))
+        bl.addWidget(_row("01", "Limpieza con Ollama",
+                          "Si lo desactivas, voxless pega el texto crudo de Whisper.",
+                          self.enabled))
 
         self.url = QLineEdit(cfg.ollama.url)
-        bl.addWidget(_row("URL",
-                          "URL del servidor Ollama. Local por defecto.",
-                          self.url))
+        bl.addWidget(_row("02", "URL", "URL del servidor Ollama. Local por defecto.", self.url))
 
         self.model = QLineEdit(cfg.ollama.model)
-        self.model.setPlaceholderText("ej. gemma3:1b, llama3.2:3b, qwen2.5:3b")
-        bl.addWidget(_row("Modelo",
+        self.model.setPlaceholderText("gemma3:1b · llama3.2:3b · qwen2.5:3b")
+        bl.addWidget(_row("03", "Modelo",
                           "Cualquier modelo que tengas con `ollama pull`.",
                           self.model))
 
@@ -920,7 +1058,7 @@ class OllamaPage(QWidget):
         self.timeout.setDecimals(1)
         self.timeout.setSuffix(" s")
         self.timeout.setValue(cfg.ollama.timeout_s)
-        bl.addWidget(_row("Timeout",
+        bl.addWidget(_row("04", "Timeout",
                           "Si Ollama tarda más, voxless pega el texto sin limpiar.",
                           self.timeout))
 
@@ -929,8 +1067,8 @@ class OllamaPage(QWidget):
         self.temperature.setSingleStep(0.1)
         self.temperature.setDecimals(2)
         self.temperature.setValue(cfg.ollama.temperature)
-        bl.addWidget(_row("Temperatura",
-                          "0 = muy literal, 1 = más libre.",
+        bl.addWidget(_row("05", "Temperatura",
+                          "0 = literal · 1 = más libre.",
                           self.temperature))
 
         outer.addWidget(_scrollable(body), 1)
@@ -954,30 +1092,29 @@ class PromptPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(_page_header(
-            "Prompt", "Plantilla que recibe Ollama. Reglas de estilo + few-shot."))
+            "§ 06 · INSTRUCTIONS",
+            "Prompt",
+            "Plantilla que recibe Ollama. Reglas de estilo + few-shot.",
+        ))
 
         body = QFrame()
         bl = QVBoxLayout(body)
-        bl.setContentsMargins(36, 16, 36, 0)
+        bl.setContentsMargins(48, 18, 48, 0)
         bl.setSpacing(8)
 
         self.editor = QPlainTextEdit()
         self.editor.setPlainText(load_prompt())
-        font = QFont("Menlo")
-        if not font.exactMatch():
-            font = QFont("Consolas")
-        font.setPointSize(11)
-        self.editor.setFont(font)
         self.editor.setMinimumHeight(360)
         bl.addWidget(self.editor, 1)
 
         outer.addWidget(body, 1)
 
         bar = QFrame()
+        bar.setStyleSheet(f"background: transparent; border-top: 1px solid {RULE};")
         h = QHBoxLayout(bar)
-        h.setContentsMargins(36, 16, 36, 28)
+        h.setContentsMargins(48, 18, 48, 24)
         h.addStretch(1)
-        btn = QPushButton("Guardar prompt")
+        btn = QPushButton("GUARDAR PROMPT")
         btn.setObjectName("Primary")
         btn.clicked.connect(lambda: self._on_save(self.editor.toPlainText()))
         h.addWidget(btn)
@@ -991,12 +1128,14 @@ class HistoryPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(_page_header(
+            "§ 07 · LEDGER",
             "Historial",
-            "Últimas transcripciones de esta sesión (máx. 100). Click para copiar."))
+            "Últimas transcripciones de esta sesión (máx. 100). Doble click copia.",
+        ))
 
         body = QFrame()
         bl = QVBoxLayout(body)
-        bl.setContentsMargins(36, 16, 36, 16)
+        bl.setContentsMargins(48, 16, 48, 16)
         bl.setSpacing(12)
 
         self.list = QListWidget()
@@ -1007,9 +1146,9 @@ class HistoryPage(QWidget):
 
         actions = QHBoxLayout()
         actions.addStretch(1)
-        copy_btn = QPushButton("Copiar")
+        copy_btn = QPushButton("COPIAR")
         copy_btn.clicked.connect(self._copy_selected)
-        clear_btn = QPushButton("Limpiar")
+        clear_btn = QPushButton("LIMPIAR")
         clear_btn.setObjectName("Ghost")
         clear_btn.clicked.connect(self.list.clear)
         actions.addWidget(copy_btn)
@@ -1024,9 +1163,9 @@ class HistoryPage(QWidget):
         ts = datetime.now().strftime("%H:%M:%S")
         text = clean if clean else raw
         if clean and clean.strip() != raw.strip():
-            display = f"{ts}  ·  {text}\n              raw: {raw}"
+            display = f"{ts}    {text}\n              raw — {raw}"
         else:
-            display = f"{ts}  ·  {text}"
+            display = f"{ts}    {text}"
         item = QListWidgetItem(display)
         item.setData(Qt.ItemDataRole.UserRole, text)
         self.list.insertItem(0, item)
@@ -1051,8 +1190,10 @@ class PermissionsPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(_page_header(
+            "§ 03 · PRIVILEGES",
             "Permisos",
-            "Necesarios para que voxless escuche tu hotkey y grabe el micrófono globalmente."))
+            "Necesarios para que voxless escuche tu hotkey y grabe el micrófono globalmente.",
+        ))
 
         body = QFrame()
         bl = QVBoxLayout(body)
@@ -1062,58 +1203,59 @@ class PermissionsPage(QWidget):
         perms = list_permissions()
         if not perms:
             note = QLabel("Tu plataforma no requiere configuración adicional.")
-            note.setStyleSheet("color:#6b7280; padding:24px 36px;")
+            note.setStyleSheet(f"color:{INK_MUTE}; padding:24px 48px; font-family:{_mono()};")
             bl.addWidget(note)
         else:
-            for perm in perms:
-                bl.addWidget(self._build_row(perm))
+            for i, perm in enumerate(perms, start=1):
+                bl.addWidget(self._build_row(f"{i:02d}", perm))
 
         tip_wrap = QFrame()
         tip_wrap_layout = QVBoxLayout(tip_wrap)
-        tip_wrap_layout.setContentsMargins(36, 16, 36, 0)
+        tip_wrap_layout.setContentsMargins(48, 18, 48, 4)
         tip = QLabel(
-            "<b>Tip</b> — si el panel de System Settings no deja seleccionar voxless, "
+            "<b>NOTA</b> — si el panel de System Settings no deja seleccionar voxless, "
             "arrastra <code>/Applications/voxless.app</code> desde Finder al panel. "
-            "Tras conceder un permiso, vuelve y pulsa <i>Verificar</i>."
+            "Tras conceder un permiso, vuelve y pulsa <i>verificar</i>."
         )
         tip.setObjectName("TipBox")
         tip.setWordWrap(True)
         tip.setTextFormat(Qt.TextFormat.RichText)
-        tip.setStyleSheet("padding:12px 14px; font-size:12px;")
+        tip.setStyleSheet(
+            f"#TipBox {{ padding: 14px 16px; }}"
+        )
         tip_wrap_layout.addWidget(tip)
         bl.addWidget(tip_wrap)
 
         outer.addWidget(_scrollable(body), 1)
 
         bar = QFrame()
+        bar.setStyleSheet(f"background: transparent; border-top: 1px solid {RULE};")
         h = QHBoxLayout(bar)
-        h.setContentsMargins(36, 12, 36, 28)
+        h.setContentsMargins(48, 14, 48, 24)
         h.addStretch(1)
-        refresh = QPushButton("Verificar de nuevo")
+        refresh = QPushButton("VERIFICAR DE NUEVO")
         refresh.clicked.connect(self.refresh)
         h.addWidget(refresh)
         outer.addWidget(bar)
 
-    def _build_row(self, perm: Permission) -> QWidget:
+    def _build_row(self, idx: str, perm: Permission) -> QWidget:
         status = QLabel("…")
-        status.setMinimumWidth(96)
+        status.setMinimumWidth(110)
         status.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         controls: list[QWidget] = [status]
         if perm.request is not None:
-            req_btn = QPushButton(perm.request_label)
+            req_btn = QPushButton(perm.request_label.upper())
             req_btn.setObjectName("Primary")
             req_btn.clicked.connect(self._make_request_handler(perm))
             controls.append(req_btn)
-        open_btn = QPushButton("Abrir ajustes")
+        open_btn = QPushButton("ABRIR AJUSTES")
         open_btn.clicked.connect(perm.open_settings)
         controls.append(open_btn)
 
         spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         spacer.setFixedSize(0, 0)
-
-        row = _row(perm.title, perm.description, spacer, extra_controls=controls)
+        row = _row(idx, perm.title, perm.description, spacer, extra_controls=controls)
         self._rows.append((perm, status))
         self._render(perm, status)
         return row
@@ -1134,29 +1276,26 @@ class PermissionsPage(QWidget):
             st = perm.detect()
         except Exception:
             st = "unknown"
+        base = (
+            f"font-family:{_mono()}; font-size:10px; font-weight:700;"
+            f" letter-spacing:0.18em; padding:6px 12px; border-radius:3px;"
+        )
         if st == "granted":
-            label.setText("Concedido")
-            label.setStyleSheet(
-                "color:#0a7c0a; background:rgba(16,185,129,0.14);"
-                " border-radius:8px; padding:5px 12px; font-weight:600; font-size:12px;"
-            )
+            label.setText("CONCEDIDO")
+            label.setStyleSheet(base + f" color:#15803d; background:rgba(16,185,129,0.14);")
         elif st == "denied":
-            label.setText("Falta")
-            label.setStyleSheet(
-                "color:#b40000; background:rgba(220,38,38,0.12);"
-                " border-radius:8px; padding:5px 12px; font-weight:600; font-size:12px;"
-            )
+            label.setText("FALTA")
+            label.setStyleSheet(base + f" color:{PEAK}; background:rgba(220,38,38,0.12);")
         else:
             label.setText("—")
-            label.setStyleSheet(
-                "color:#6b7280; background:rgba(107,114,128,0.10);"
-                " border-radius:8px; padding:5px 12px; font-weight:600; font-size:12px;"
-            )
+            label.setStyleSheet(base + f" color:{INK_MUTE}; background:rgba(122,113,106,0.10);")
 
     def refresh(self) -> None:
         for perm, lbl in self._rows:
             self._render(perm, lbl)
 
+
+# ─── main window ────────────────────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
     config_changed = Signal(object)
@@ -1166,63 +1305,56 @@ class MainWindow(QMainWindow):
     def __init__(self, cfg: Config) -> None:
         super().__init__()
         self.setWindowTitle("voxless")
-        self.setMinimumSize(QSize(900, 620))
-        self.resize(QSize(960, 660))
+        self.setMinimumSize(QSize(960, 660))
+        self.resize(QSize(1040, 720))
         self._cfg = cfg
 
         root = QWidget()
         root.setObjectName("Root")
-        root_layout = QHBoxLayout(root)
-        root_layout.setContentsMargins(0, 0, 0, 0)
-        root_layout.setSpacing(0)
+        rl = QHBoxLayout(root)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(0)
 
+        # ── sidebar ──────────────────────────────────────────────────
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(216)
-        side_layout = QVBoxLayout(sidebar)
-        side_layout.setContentsMargins(0, 0, 0, 12)
-        side_layout.setSpacing(0)
+        sidebar.setFixedWidth(232)
+        side = QVBoxLayout(sidebar)
+        side.setContentsMargins(0, 0, 0, 0)
+        side.setSpacing(0)
 
-        brand = QFrame()
+        brand = QLabel("voxless.")
         brand.setObjectName("SidebarBrand")
-        bl = QHBoxLayout(brand)
-        bl.setContentsMargins(22, 22, 22, 14)
-        bl.setSpacing(10)
-        dot = QLabel()
-        dot.setObjectName("SidebarBrandDot")
-        bl.addWidget(dot, 0, Qt.AlignmentFlag.AlignVCenter)
-        name = QLabel("voxless")
-        name.setObjectName("SidebarBrandText")
-        bl.addWidget(name, 1, Qt.AlignmentFlag.AlignVCenter)
-        side_layout.addWidget(brand)
+        side.addWidget(brand)
+        tag = QLabel("STUDIO PRESS · MMVI")
+        tag.setObjectName("SidebarTagline")
+        side.addWidget(tag)
 
-        section = QLabel("Workspace")
-        section.setObjectName("SidebarSection")
-        side_layout.addWidget(section)
+        sec = QLabel("§ INDEX")
+        sec.setObjectName("SidebarSection")
+        side.addWidget(sec)
 
         self.nav = QListWidget()
         self.nav.setObjectName("NavList")
         self.nav.setFrameShape(QFrame.Shape.NoFrame)
-        self.nav.setIconSize(QSize(16, 16))
-        self.nav.setSpacing(0)
-        for _key, label, icon_name in NAV_ITEMS:
-            item = QListWidgetItem(label)
-            item.setIcon(render_icon(icon_name, 16, "#374151"))
-            item.setSizeHint(QSize(0, 32))
+        for i, (_key, label) in enumerate(NAV_ITEMS, start=1):
+            item = QListWidgetItem(f"{i:02d}    {label}")
+            item.setSizeHint(QSize(0, 30))
             self.nav.addItem(item)
         self.nav.setCurrentRow(0)
-        side_layout.addWidget(self.nav, 1)
+        side.addWidget(self.nav, 1)
 
-        version_lbl = QLabel("voxless · 0.1.5")
+        version_lbl = QLabel("v 0.1.6 · LOCAL")
         version_lbl.setObjectName("VersionFooter")
-        side_layout.addWidget(version_lbl)
+        side.addWidget(version_lbl)
 
-        root_layout.addWidget(sidebar)
+        rl.addWidget(sidebar)
 
+        # ── content area ─────────────────────────────────────────────
         content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(0)
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(0)
 
         self.stack = QStackedWidget()
         self.home_page = HomePage(cfg)
@@ -1239,9 +1371,9 @@ class MainWindow(QMainWindow):
         ):
             self.stack.addWidget(w)
         self.nav.currentRowChanged.connect(self._on_nav_change)
-        content_layout.addWidget(self.stack, 1)
+        cl.addWidget(self.stack, 1)
 
-        root_layout.addWidget(content, 1)
+        rl.addWidget(content, 1)
         self.setCentralWidget(root)
 
         self._apply_qss()
@@ -1252,31 +1384,28 @@ class MainWindow(QMainWindow):
             self.permissions_page.refresh()
 
     def _apply_qss(self) -> None:
-        qss = QSS
-        if _is_dark_mode():
-            qss = QSS + QSS_DARK
-        self.setStyleSheet(qss)
+        self.setStyleSheet(QSS_DARK() if _is_dark_mode() else QSS_LIGHT())
 
     def _handle_config_save(self, cfg: Config) -> None:
         try:
             save_config(cfg)
         except Exception as exc:
             log.exception("Failed to save config")
-            self.show_toast(f"No se pudo guardar: {exc}", variant="error")
+            self.show_toast(f"NO SE PUDO GUARDAR · {exc}", variant="error")
             return
-        self.home_page.set_hotkey(cfg.hotkey)
+        self.home_page.set_hotkey(cfg.hotkey, cfg.hotkey_mode)
         self.config_changed.emit(cfg)
-        self.show_toast("Configuración guardada")
+        self.show_toast("CONFIGURACIÓN GUARDADA")
 
     def _handle_prompt_save(self, text: str) -> None:
         try:
             save_prompt(text)
         except Exception as exc:
             log.exception("Failed to save prompt")
-            self.show_toast(f"No se pudo guardar el prompt: {exc}", variant="error")
+            self.show_toast(f"NO SE PUDO GUARDAR · {exc}", variant="error")
             return
         self.prompt_changed.emit(text)
-        self.show_toast("Prompt guardado")
+        self.show_toast("PROMPT GUARDADO")
 
     def show_toast(self, text: str, variant: str = "success") -> None:
         toast = Toast(text, variant=variant, parent=self)  # type: ignore[arg-type]
@@ -1286,11 +1415,11 @@ class MainWindow(QMainWindow):
         self.home_page.set_state(state)
 
     def push_audio_peak(self, peak: float) -> None:
-        self.home_page.waveform.push(peak)
+        self.home_page.vu.push(peak)
 
     def push_history(self, raw: str, clean: str) -> None:
         self.history_page.push(raw, clean)
-        self.home_page.last_text.setText(clean if clean else raw)
+        self.home_page.push_history_preview(clean if clean else raw)
 
     def closeEvent(self, event) -> None:
         event.ignore()
