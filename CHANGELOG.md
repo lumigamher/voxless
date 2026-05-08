@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.4 — 2026-05-08
+
+- **UI redesign — modern + clean**. New palette (off-white surfaces, voxless red accent), refined typography, real Lucide-style SVG icons (no more emoji glyphs in the sidebar), Linear/Raycast-inspired settings rows with hairline dividers instead of boxed cards, hero home screen with a pill status indicator + giant hotkey display.
+- **Floating toast notifications**. Saving any settings now shows a slide-in toast confirming the save (or surfacing an error). Auto-dismisses after ~2.4s.
+- **New module `icons.py`**: inline SVG icons recolored at render time, packaged as scalable QIcons.
+- **Stable code-signing identity** for local builds (`scripts/sign_macos.sh`). macOS TCC stops wiping permissions across rebuilds. Documented in README.
+
 ## v0.1.3 — 2026-05-08
 
 - **Hotkey recorder widget**. Click "Tecla" in **General**, then press the key (or combination) you want — voxless captures and stores the right pynput spec automatically. Distinguishes left/right Option / Cmd / Ctrl / Shift via native virtual key codes (Mac and Windows). Esc cancels capture.
