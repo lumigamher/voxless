@@ -106,6 +106,18 @@ uv run pyinstaller voxless.spec --noconfirm --clean
 
 Output appears in `dist/voxless.app` (macOS) or `dist/voxless/` (Windows).
 
+### macOS: stable code signing (so permissions persist across rebuilds)
+
+macOS TCC (the database that stores Accessibility / Input Monitoring / Microphone grants) keys ad-hoc-signed apps by `cdhash`. Every rebuild changes the cdhash, which wipes your permissions. To avoid that pain, sign with a stable self-signed identity:
+
+```bash
+./scripts/sign_macos.sh dist/voxless.app
+```
+
+The first run creates a `voxless-dev` cert in your **login keychain** (no password, no trust root), saves nothing to disk, and never commits a key. Subsequent runs reuse the same identity, so future updates inherit your existing TCC grants.
+
+You still need to grant Accessibility + Input Monitoring **once** after the first signed install (System Settings → Privacy & Security). After that, rebuilds keep the grant.
+
 ## Tests
 
 ```bash
