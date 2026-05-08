@@ -62,13 +62,22 @@ QSS = """
   color: #0a0a0a;
 }
 
-QMainWindow, #Root { background: #fafafa; }
+/* Surface levels (light mode):
+   L0 page bg     #f7f7f8
+   L1 card        #ffffff
+   L2 button/input on card  #f4f4f5  (zinc-100)
+   L3 hover       #e4e4e7  (zinc-200)
+   L4 pressed     #d4d4d8  (zinc-300)
+   accent         #dc2626  (red-600)
+*/
+
+QMainWindow, #Root { background: #f7f7f8; }
 
 #Sidebar {
-  background: #f4f4f5;
-  border-right: 1px solid #e5e5e5;
+  background: #f1f1f3;
+  border-right: 1px solid #e4e4e7;
 }
-#SidebarBrand { padding: 22px 18px 18px 18px; }
+#SidebarBrand { padding: 22px 18px 14px 18px; }
 #SidebarBrandText { font-size: 17px; font-weight: 700; color: #0a0a0a; letter-spacing: -0.01em; }
 #SidebarBrandDot {
   background: """ + ACCENT + """;
@@ -77,11 +86,11 @@ QMainWindow, #Root { background: #fafafa; }
   max-width: 12px; max-height: 12px;
 }
 #SidebarSection {
-  color: #6b7280;
+  color: #71717a;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 18px 22px 6px 22px;
+  letter-spacing: 0.10em;
+  padding: 14px 22px 6px 22px;
   text-transform: uppercase;
 }
 
@@ -92,22 +101,23 @@ QListWidget#NavList {
   font-size: 13px;
 }
 QListWidget#NavList::item {
-  padding: 7px 14px;
-  border-radius: 7px;
+  padding: 8px 14px;
+  border-radius: 8px;
   margin: 1px 10px;
-  color: #1f2937;
+  color: #27272a;
 }
 QListWidget#NavList::item:selected {
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff;
   color: #0a0a0a;
   font-weight: 600;
+  border: 1px solid #e4e4e7;
 }
 QListWidget#NavList::item:hover:!selected {
   background: rgba(255, 255, 255, 0.55);
 }
 
 #VersionFooter {
-  color: #9ca3af;
+  color: #a1a1aa;
   font-size: 10px;
   padding: 12px 22px;
   letter-spacing: 0.04em;
@@ -116,59 +126,70 @@ QListWidget#NavList::item:hover:!selected {
 #PageHeader {
   padding: 28px 36px 20px 36px;
   background: transparent;
-  border-bottom: 1px solid #ececec;
+  border-bottom: 1px solid #e4e4e7;
 }
 QLabel#PageTitle {
   font-size: 24px;
   font-weight: 700;
-  color: #0a0a0a;
+  color: #09090b;
   letter-spacing: -0.02em;
 }
 QLabel#PageSub {
   font-size: 13px;
-  color: #6b7280;
+  color: #71717a;
   margin-top: 2px;
 }
 
 #PageBody { background: transparent; }
 
-QFrame#Row { border-bottom: 1px solid #ececec; }
-QFrame#Row:last { border-bottom: none; }
-QLabel#RowTitle { font-size: 13.5px; font-weight: 600; color: #111; }
-QLabel#RowDesc  { font-size: 12px; color: #6b7280; }
+QFrame#Row { border-bottom: 1px solid #ececee; background: transparent; }
+QLabel#RowTitle { font-size: 13.5px; font-weight: 600; color: #18181b; }
+QLabel#RowDesc  { font-size: 12px; color: #71717a; }
 
+/* Inputs sit on the page bg (no card wrapper now) — solid white with
+   a slightly stronger border so they read as input affordances. */
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit {
   background: #ffffff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #d4d4d8;
   border-radius: 8px;
-  padding: 7px 10px;
+  padding: 7px 11px;
   selection-background-color: """ + ACCENT + """;
   font-size: 13px;
+  color: #09090b;
 }
+QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover,
+QPlainTextEdit:hover { border-color: #a1a1aa; }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus,
-QPlainTextEdit:focus { border-color: """ + ACCENT + """; }
-QComboBox::drop-down { border: 0; width: 20px; }
-
-QPushButton {
+QPlainTextEdit:focus {
+  border-color: """ + ACCENT + """;
   background: #ffffff;
-  border: 1px solid #e5e7eb;
+}
+QComboBox::drop-down { border: 0; width: 22px; }
+
+/* Default button = filled tonal. Visible against both the page bg
+   AND on white cards, no contrast collapse. */
+QPushButton {
+  background: #f4f4f5;
+  border: 1px solid #e4e4e7;
   border-radius: 8px;
-  padding: 7px 14px;
-  color: #0a0a0a;
+  padding: 8px 14px;
+  color: #18181b;
   font-size: 13px;
   font-weight: 500;
 }
-QPushButton:hover { background: #f3f4f6; }
-QPushButton:pressed { background: #e5e7eb; }
-QPushButton:disabled { color: #9ca3af; background: #f9fafb; }
+QPushButton:hover { background: #e4e4e7; border-color: #d4d4d8; }
+QPushButton:pressed { background: #d4d4d8; }
+QPushButton:disabled { color: #a1a1aa; background: #f4f4f5; border-color: #e4e4e7; }
 
 QPushButton#Primary {
   background: """ + ACCENT + """;
-  color: white;
+  color: #ffffff;
   border: 1px solid """ + ACCENT_HOVER + """;
   font-weight: 600;
 }
 QPushButton#Primary:hover { background: """ + ACCENT_HOVER + """; }
+QPushButton#Primary:pressed { background: #991b1b; }
+
 QPushButton#Ghost {
   background: transparent;
   border: 1px solid transparent;
@@ -178,102 +199,129 @@ QPushButton#Ghost {
 QPushButton#Ghost:hover { background: """ + ACCENT_TINT + """; }
 
 QListWidget#History {
-  background: transparent;
-  border: 1px solid #ececec;
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
   border-radius: 12px;
   outline: 0;
   padding: 4px;
 }
 QListWidget#History::item {
   background: transparent;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid #f4f4f5;
   border-radius: 0;
   margin: 0;
   padding: 12px 14px;
-  color: #111;
+  color: #18181b;
 }
-QListWidget#History::item:hover { background: #f9fafb; }
+QListWidget#History::item:hover { background: #fafafa; }
 QListWidget#History::item:selected {
   background: """ + ACCENT_TINT + """;
-  color: #111;
+  color: #18181b;
 }
 
-QCheckBox { color: #111; font-size: 13px; }
+QCheckBox { color: #18181b; font-size: 13px; spacing: 8px; }
 QCheckBox::indicator {
   width: 18px; height: 18px;
-  border: 1px solid #d1d5db; border-radius: 5px; background: white;
+  border: 1px solid #d4d4d8; border-radius: 5px; background: white;
 }
+QCheckBox::indicator:hover { border-color: #a1a1aa; }
 QCheckBox::indicator:checked {
   background: """ + ACCENT + """;
   border-color: """ + ACCENT_HOVER + """;
   image: none;
 }
 
+QScrollBar:vertical {
+  background: transparent; width: 10px; margin: 4px 2px 4px 0;
+}
+QScrollBar::handle:vertical {
+  background: rgba(0,0,0,0.16); border-radius: 4px; min-height: 32px;
+}
+QScrollBar::handle:vertical:hover { background: rgba(0,0,0,0.26); }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+
 #Hero {
-  background: white;
-  border: 1px solid #ececec;
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
   border-radius: 18px;
-  padding: 36px;
 }
-#HeroPill {
-  background: rgba(220, 38, 38, 0.10);
-  color: """ + ACCENT + """;
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
+#HeroHint  { color: #71717a; font-size: 13px; }
 #HeroHotkey {
-  background: rgba(15, 23, 42, 0.04);
-  color: #0f172a;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #18181b;
+  color: #fafafa;
+  border: 1px solid #27272a;
   border-radius: 14px;
-  padding: 14px 22px;
+  padding: 16px 24px;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-#HeroHint  { color: #6b7280; font-size: 13px; }
-#HeroLast  { color: #6b7280; font-size: 11px; font-weight: 600;
-             letter-spacing: 0.08em; text-transform: uppercase; }
-#HeroLastText { color: #111; font-size: 14px; }
+#HeroLast  { color: #a1a1aa; font-size: 11px; font-weight: 600;
+             letter-spacing: 0.10em; text-transform: uppercase; }
+#HeroLastText { color: #18181b; font-size: 14px; line-height: 22px; }
+
+#LastBox {
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 14px;
+}
+
+#TipBox {
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+  border-radius: 10px;
+  color: #3f3f46;
+}
 """
 
 QSS_DARK = """
-* { color: #f5f5f7; }
-QMainWindow, #Root { background: #0c0c0d; }
-#Sidebar { background: #141416; border-right-color: #1f1f23; }
+* { color: #f4f4f5; }
+QMainWindow, #Root { background: #09090b; }
+
+#Sidebar { background: #111114; border-right-color: #1f1f23; }
 #SidebarBrandText { color: #fafafa; }
-#SidebarSection { color: #9ca3af; }
+#SidebarSection { color: #71717a; }
 QListWidget#NavList::item { color: #d4d4d8; }
 QListWidget#NavList::item:selected {
-  background: rgba(255,255,255,0.06); color: #fafafa;
+  background: #18181b; color: #fafafa; border: 1px solid #27272a;
 }
 QListWidget#NavList::item:hover:!selected { background: rgba(255,255,255,0.03); }
+#VersionFooter { color: #52525b; }
+
 #PageHeader { border-bottom-color: #1f1f23; }
 QLabel#PageTitle { color: #fafafa; }
-QLabel#PageSub  { color: #9ca3af; }
+QLabel#PageSub  { color: #a1a1aa; }
 QFrame#Row { border-bottom-color: #1f1f23; }
-QLabel#RowTitle { color: #f5f5f7; }
-QLabel#RowDesc { color: #9ca3af; }
+QLabel#RowTitle { color: #f4f4f5; }
+QLabel#RowDesc { color: #a1a1aa; }
+
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit {
-  background: #18181b; border-color: #27272a; color: #f5f5f7;
+  background: #18181b; border-color: #27272a; color: #fafafa;
 }
+QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover,
+QPlainTextEdit:hover { border-color: #3f3f46; }
+
 QPushButton {
-  background: #18181b; color: #f5f5f7; border-color: #27272a;
+  background: #1f1f23; color: #fafafa; border-color: #2e2e33;
 }
-QPushButton:hover { background: #27272a; }
+QPushButton:hover { background: #2a2a2e; border-color: #3f3f46; }
 QPushButton:pressed { background: #3f3f46; }
-QListWidget#History { border-color: #1f1f23; }
-QListWidget#History::item { color: #f5f5f7; border-bottom-color: #1f1f23; }
+
+QListWidget#History { background: #111114; border-color: #27272a; }
+QListWidget#History::item { color: #fafafa; border-bottom-color: #1f1f23; }
 QListWidget#History::item:hover { background: #18181b; }
-QCheckBox { color: #f5f5f7; }
+
+QCheckBox { color: #fafafa; }
 QCheckBox::indicator { background: #18181b; border-color: #3f3f46; }
+
 #Hero { background: #18181b; border-color: #27272a; }
-#HeroHotkey { background: rgba(255,255,255,0.04); color: #fafafa; border-color: rgba(255,255,255,0.08); }
-#HeroLastText { color: #f5f5f7; }
-#VersionFooter { color: #6b7280; }
+#HeroHotkey { background: #09090b; color: #fafafa; border-color: #27272a; }
+#HeroHint { color: #a1a1aa; }
+#HeroLast { color: #71717a; }
+#HeroLastText { color: #fafafa; }
+#LastBox { background: #18181b; border-color: #27272a; }
+#TipBox { background: #18181b; border-color: #27272a; color: #d4d4d8; }
 """
 
 NAV_ITEMS = [
@@ -610,19 +658,33 @@ def _scrollable(content: QWidget) -> QWidget:
     return sa
 
 
+_PILL_STYLES = {
+    "idle":       ("color:#15803d; background:rgba(16,185,129,0.14);"),
+    "recording":  ("color:" + ACCENT + "; background:rgba(220,38,38,0.14);"),
+    "processing": ("color:#b45309; background:rgba(245,158,11,0.18);"),
+    "error":      ("color:" + ACCENT + "; background:rgba(220,38,38,0.14);"),
+}
+
+
 class HomePage(QWidget):
     def __init__(self, cfg: Config) -> None:
         super().__init__()
         self._cfg = cfg
         wrap = QVBoxLayout(self)
         wrap.setContentsMargins(36, 28, 36, 36)
-        wrap.setSpacing(20)
+        wrap.setSpacing(18)
 
         hero = QFrame()
         hero.setObjectName("Hero")
+        shadow = QGraphicsDropShadowEffect(hero)
+        shadow.setBlurRadius(28)
+        shadow.setOffset(0, 6)
+        shadow.setColor(QColor(15, 23, 42, 18))
+        hero.setGraphicsEffect(shadow)
+
         h = QVBoxLayout(hero)
-        h.setSpacing(18)
-        h.setContentsMargins(36, 36, 36, 36)
+        h.setSpacing(20)
+        h.setContentsMargins(36, 32, 36, 32)
 
         pill_row = QHBoxLayout()
         pill_row.setSpacing(10)
@@ -634,11 +696,16 @@ class HomePage(QWidget):
         pill_row.addStretch(1)
         h.addLayout(pill_row)
 
-        title = QLabel("Mantén la tecla y habla")
-        title.setStyleSheet("font-size:28px; font-weight:700; letter-spacing:-0.02em; color:#0a0a0a;")
-        h.addWidget(title)
+        self._title = QLabel("Mantén la tecla y habla")
+        self._title.setStyleSheet(
+            "font-size:28px; font-weight:700; letter-spacing:-0.02em; color:#09090b;"
+        )
+        h.addWidget(self._title)
 
-        sub = QLabel("voxless transcribe localmente con Whisper y limpia el texto con Ollama. Privado, rápido, offline.")
+        sub = QLabel(
+            "voxless transcribe localmente con Whisper y limpia el texto con Ollama. "
+            "Privado, rápido, offline."
+        )
         sub.setObjectName("HeroHint")
         sub.setWordWrap(True)
         h.addWidget(sub)
@@ -657,12 +724,10 @@ class HomePage(QWidget):
         wrap.addWidget(hero)
 
         last_box = QFrame()
-        last_box.setStyleSheet(
-            "background: white; border:1px solid #ececec; border-radius: 14px; padding: 0;"
-        )
+        last_box.setObjectName("LastBox")
         lb = QVBoxLayout(last_box)
         lb.setContentsMargins(24, 18, 24, 22)
-        lb.setSpacing(8)
+        lb.setSpacing(6)
         lt = QLabel("Última transcripción")
         lt.setObjectName("HeroLast")
         lb.addWidget(lt)
@@ -673,10 +738,20 @@ class HomePage(QWidget):
         wrap.addWidget(last_box)
 
         wrap.addStretch(1)
+        self._apply_pill("idle")
+
+    def _apply_pill(self, state: str) -> None:
+        base = (
+            "border-radius:999px; padding:6px 14px;"
+            " font-size:12px; font-weight:600; letter-spacing:0.02em;"
+        )
+        color = _PILL_STYLES.get(state, _PILL_STYLES["idle"])
+        self.status_pill.setStyleSheet(color + " " + base)
 
     def set_state(self, state: str) -> None:
         text, _sub = STATE_TEXT.get(state, STATE_TEXT["idle"])
         self.status_pill.setText(text)
+        self._apply_pill(state)
         self.dot.set_state(state)
         self.waveform.set_active(state == "recording")
 
@@ -993,19 +1068,20 @@ class PermissionsPage(QWidget):
             for perm in perms:
                 bl.addWidget(self._build_row(perm))
 
+        tip_wrap = QFrame()
+        tip_wrap_layout = QVBoxLayout(tip_wrap)
+        tip_wrap_layout.setContentsMargins(36, 16, 36, 0)
         tip = QLabel(
             "<b>Tip</b> — si el panel de System Settings no deja seleccionar voxless, "
             "arrastra <code>/Applications/voxless.app</code> desde Finder al panel. "
             "Tras conceder un permiso, vuelve y pulsa <i>Verificar</i>."
         )
+        tip.setObjectName("TipBox")
         tip.setWordWrap(True)
         tip.setTextFormat(Qt.TextFormat.RichText)
-        tip.setStyleSheet(
-            "color:#374151; background:#f9fafb; border:1px solid #ececec;"
-            " border-radius:10px; padding:12px 14px; margin: 16px 36px;"
-            " font-size:12px;"
-        )
-        bl.addWidget(tip)
+        tip.setStyleSheet("padding:12px 14px; font-size:12px;")
+        tip_wrap_layout.addWidget(tip)
+        bl.addWidget(tip_wrap)
 
         outer.addWidget(_scrollable(body), 1)
 
@@ -1137,7 +1213,7 @@ class MainWindow(QMainWindow):
         self.nav.setCurrentRow(0)
         side_layout.addWidget(self.nav, 1)
 
-        version_lbl = QLabel("voxless · 0.1.4")
+        version_lbl = QLabel("voxless · 0.1.5")
         version_lbl.setObjectName("VersionFooter")
         side_layout.addWidget(version_lbl)
 

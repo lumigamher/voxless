@@ -68,7 +68,7 @@ def main() -> int:
         return 1
 
     log.info(
-        "Starting voxless 0.1.4 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.1.5 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",

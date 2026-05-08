@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.5 — 2026-05-08
+
+- **Refined visual hierarchy**. v0.1.4 had white buttons on white cards; now there are three clear surface levels (page · card · interactive). Default buttons use a tonal `#f4f4f5` fill that reads against both backgrounds. Inputs get stronger borders.
+- **State-aware status pill** on the Inicio hero — green when idle, red when grabando, amber when procesando.
+- **Soft drop shadow** on the hero card (offset 0/6, blur 28, alpha ~7%) for the right amount of lift without looking 2010.
+- **Better hotkey display** — black pill with white text, more "command palette" feel.
+- **Polished dark mode** — three-level surface system mirrored, refined hover/selected states for nav, version footer, scrollbar.
+
 ## v0.1.4 — 2026-05-08
 
 - **UI redesign — modern + clean**. New palette (off-white surfaces, voxless red accent), refined typography, real Lucide-style SVG icons (no more emoji glyphs in the sidebar), Linear/Raycast-inspired settings rows with hairline dividers instead of boxed cards, hero home screen with a pill status indicator + giant hotkey display.
