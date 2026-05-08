@@ -20,7 +20,7 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QKeyEvent, QPainter, QPen
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -50,35 +50,37 @@ from .prompts import load_prompt
 log = logging.getLogger(__name__)
 
 QSS = """
+* { font-family: -apple-system, "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui, sans-serif; }
 QMainWindow, #Root { background: #f5f5f7; }
 #Sidebar {
-  background: #ececec;
+  background: rgba(236, 236, 236, 0.96);
   border-right: 1px solid #d8d8d8;
 }
 #SidebarTitle {
   color: #6e6e73;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  padding: 18px 16px 6px 16px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 22px 18px 8px 18px;
   text-transform: uppercase;
 }
 QListWidget#NavList {
   background: transparent;
   border: none;
   outline: 0;
+  font-size: 13px;
 }
 QListWidget#NavList::item {
-  padding: 8px 16px;
-  border-radius: 6px;
-  margin: 2px 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  margin: 2px 10px;
   color: #1d1d1f;
 }
 QListWidget#NavList::item:selected {
-  background: rgba(0, 122, 255, 0.18);
+  background: rgba(0, 122, 255, 0.16);
   color: #1d1d1f;
 }
-QListWidget#NavList::item:hover { background: rgba(0,0,0,0.05); }
+QListWidget#NavList::item:hover:!selected { background: rgba(0,0,0,0.05); }
 
 #StatusBanner {
   background: #ffffff;
@@ -173,13 +175,13 @@ QCheckBox::indicator { background: #1c1c1e; border-color: #3a3a3c; }
 """
 
 NAV_ITEMS = [
-    ("home", "Inicio"),
-    ("general", "General"),
-    ("permissions", "Permisos"),
-    ("whisper", "Whisper"),
-    ("ollama", "Ollama"),
-    ("prompt", "Prompt"),
-    ("history", "Historial"),
+    ("home",        "Inicio",     "◉"),
+    ("general",     "General",    "⚙"),
+    ("permissions", "Permisos",   "🔒"),
+    ("whisper",     "Whisper",    "✎"),
+    ("ollama",      "Ollama",     "◯"),
+    ("prompt",      "Prompt",     "❝"),
+    ("history",     "Historial",  "⏱"),
 ]
 
 STATE_TEXT = {
@@ -360,6 +362,177 @@ class HomePage(QWidget):
         self.waveform.set_active(state == "recording")
 
 
+_MAC_VK_TO_NAME = {
+    61: "right_option", 58: "left_option",
+    54: "cmd_r", 55: "cmd_l",
+    62: "ctrl_r", 59: "ctrl_l",
+    60: "shift_r", 56: "shift_l",
+    63: "fn",
+}
+
+_WIN_VK_TO_NAME = {
+    0xA5: "right_option", 0xA4: "left_option",
+    0xA3: "ctrl_r", 0xA2: "ctrl_l",
+    0xA1: "shift_r", 0xA0: "shift_l",
+    0x5C: "cmd_r", 0x5B: "cmd_l",
+}
+
+
+def _named_key_from_event(event: QKeyEvent) -> str | None:
+    key = event.key()
+
+    if Qt.Key.Key_F1 <= key <= Qt.Key.Key_F35:
+        return f"f{key - Qt.Key.Key_F1 + 1}"
+    if key == Qt.Key.Key_Space:
+        return "space"
+    if key == Qt.Key.Key_Tab:
+        return "tab"
+    if key == Qt.Key.Key_Escape:
+        return "esc"
+    if key == Qt.Key.Key_CapsLock:
+        return "caps_lock"
+
+    if key in (Qt.Key.Key_Alt, Qt.Key.Key_Control, Qt.Key.Key_Meta, Qt.Key.Key_Shift):
+        nv = event.nativeVirtualKey()
+        if sys.platform == "darwin":
+            mapped = _MAC_VK_TO_NAME.get(nv)
+            if mapped:
+                return mapped
+        elif sys.platform.startswith("win"):
+            mapped = _WIN_VK_TO_NAME.get(nv)
+            if mapped:
+                return mapped
+        if key == Qt.Key.Key_Alt:
+            return "alt"
+        if key == Qt.Key.Key_Control:
+            return "ctrl"
+        if key == Qt.Key.Key_Meta:
+            return "cmd" if sys.platform == "darwin" else "ctrl"
+        if key == Qt.Key.Key_Shift:
+            return "shift"
+
+    if event.text() and event.text().strip() and len(event.text()) == 1:
+        ch = event.text().lower()
+        if ch.isalnum():
+            return ch
+
+    return None
+
+
+def _spec_pretty(spec: str) -> str:
+    if not spec:
+        return "(sin asignar)"
+    parts = [p.strip("<> ") for p in spec.split("+")]
+    label_map = {
+        "right_option": "⌥ Right",
+        "left_option": "⌥ Left",
+        "alt": "⌥",
+        "cmd": "⌘",
+        "cmd_l": "⌘ Left",
+        "cmd_r": "⌘ Right",
+        "ctrl": "⌃",
+        "ctrl_l": "⌃ Left",
+        "ctrl_r": "⌃ Right",
+        "shift": "⇧",
+        "shift_l": "⇧ Left",
+        "shift_r": "⇧ Right",
+        "space": "Space",
+        "tab": "Tab",
+        "esc": "Esc",
+        "caps_lock": "Caps Lock",
+        "fn": "Fn",
+    }
+    pretty = []
+    for p in parts:
+        if p in label_map:
+            pretty.append(label_map[p])
+        elif p.startswith("f") and p[1:].isdigit():
+            pretty.append(p.upper())
+        else:
+            pretty.append(p.upper())
+    return " + ".join(pretty)
+
+
+class HotkeyRecorder(QPushButton):
+    captured = Signal(str)  # emits pynput-compatible spec
+
+    def __init__(self, current: str = "") -> None:
+        super().__init__()
+        self._spec = current
+        self._recording = False
+        self.setMinimumHeight(38)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clicked.connect(self._toggle_record)
+        self._update_text()
+
+    def spec(self) -> str:
+        return self._spec
+
+    def set_spec(self, spec: str) -> None:
+        self._spec = spec
+        self._recording = False
+        self._update_text()
+
+    def _toggle_record(self) -> None:
+        self._recording = not self._recording
+        if self._recording:
+            self.setFocus(Qt.FocusReason.OtherFocusReason)
+            self.grabKeyboard()
+        else:
+            self.releaseKeyboard()
+        self._update_text()
+
+    def _update_text(self) -> None:
+        if self._recording:
+            self.setText("Presiona una tecla…   (Esc para cancelar)")
+            self.setStyleSheet(
+                "QPushButton { background:#fff7d6; border:1px solid #f0aa1e;"
+                " border-radius:8px; padding:8px 14px; font-weight:600; }"
+            )
+        else:
+            self.setText(_spec_pretty(self._spec))
+            self.setStyleSheet("")
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if not self._recording:
+            return super().keyPressEvent(event)
+
+        if event.key() == Qt.Key.Key_Escape and not (
+            event.modifiers() & (Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.ControlModifier
+                                 | Qt.KeyboardModifier.MetaModifier | Qt.KeyboardModifier.ShiftModifier)
+        ):
+            self._recording = False
+            self.releaseKeyboard()
+            self._update_text()
+            return
+
+        name = _named_key_from_event(event)
+        if not name:
+            return
+
+        mods: list[str] = []
+        m = event.modifiers()
+        if m & Qt.KeyboardModifier.ControlModifier and name not in ("ctrl", "ctrl_l", "ctrl_r"):
+            mods.append("ctrl")
+        if m & Qt.KeyboardModifier.AltModifier and name not in ("alt", "left_option", "right_option"):
+            mods.append("alt")
+        if m & Qt.KeyboardModifier.MetaModifier and name not in ("cmd", "cmd_l", "cmd_r"):
+            mods.append("cmd")
+        if m & Qt.KeyboardModifier.ShiftModifier and name not in ("shift", "shift_l", "shift_r"):
+            mods.append("shift")
+
+        if mods:
+            spec = "+".join(f"<{x}>" for x in mods) + "+" + name
+        else:
+            spec = name
+
+        self._spec = spec
+        self._recording = False
+        self.releaseKeyboard()
+        self._update_text()
+        self.captured.emit(spec)
+
+
 class GeneralPage(QWidget):
     def __init__(self, cfg: Config, on_save: Callable[[Config], None]) -> None:
         super().__init__()
@@ -375,9 +548,11 @@ class GeneralPage(QWidget):
         ))
 
         card, c = _card("Hotkey")
-        self.hotkey_edit = QLineEdit(cfg.hotkey)
-        self.hotkey_edit.setPlaceholderText("ej. right_option, f5, <ctrl>+<shift>+space")
-        c.addLayout(_row("Tecla", self.hotkey_edit))
+        self.hotkey_recorder = HotkeyRecorder(cfg.hotkey)
+        c.addLayout(_row("Tecla", self.hotkey_recorder))
+        hint = QLabel("Click en el botón y presiona la tecla (o combinación) que quieras usar.")
+        hint.setStyleSheet("color:#6e6e73; font-size:12px; padding-left:152px;")
+        c.addWidget(hint)
 
         self.mode_combo = QComboBox()
         self.mode_combo.addItem("Mantener presionado (push-to-talk)", "hold")
@@ -413,7 +588,7 @@ class GeneralPage(QWidget):
         layout.addStretch(1)
 
     def _save(self) -> None:
-        self._cfg.hotkey = self.hotkey_edit.text().strip() or "right_option"
+        self._cfg.hotkey = self.hotkey_recorder.spec().strip() or "right_option"
         self._cfg.hotkey_mode = self.mode_combo.currentData()
         self._cfg.min_record_ms = int(self.min_ms.value())
         self._cfg.sound_feedback = self.sound.isChecked()
@@ -470,7 +645,7 @@ class PermissionsPage(QWidget):
     def _build_row(self, perm: Permission) -> QWidget:
         row = QFrame()
         rl = QHBoxLayout(row)
-        rl.setContentsMargins(0, 6, 0, 6)
+        rl.setContentsMargins(0, 8, 0, 8)
         rl.setSpacing(12)
 
         title_col = QVBoxLayout()
@@ -485,9 +660,15 @@ class PermissionsPage(QWidget):
         rl.addLayout(title_col, 1)
 
         status = QLabel("…")
-        status.setMinimumWidth(90)
+        status.setMinimumWidth(96)
         status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         rl.addWidget(status)
+
+        if perm.request is not None:
+            req_btn = QPushButton(perm.request_label)
+            req_btn.setObjectName("Primary")
+            req_btn.clicked.connect(self._make_request_handler(perm))
+            rl.addWidget(req_btn)
 
         btn = QPushButton("Abrir ajustes")
         btn.clicked.connect(perm.open_settings)
@@ -496,6 +677,16 @@ class PermissionsPage(QWidget):
         self._rows.append((perm, status))
         self._render(perm, status)
         return row
+
+    def _make_request_handler(self, perm: Permission):
+        def handler() -> None:
+            try:
+                if perm.request:
+                    perm.request()
+            except Exception:
+                log.exception("request handler failed")
+            QTimer.singleShot(800, self.refresh)
+        return handler
 
     def _render(self, perm: Permission, label: QLabel) -> None:
         try:
@@ -761,10 +952,15 @@ class MainWindow(QMainWindow):
         self.nav = QListWidget()
         self.nav.setObjectName("NavList")
         self.nav.setFrameShape(QFrame.Shape.NoFrame)
-        for _key, label in NAV_ITEMS:
-            self.nav.addItem(QListWidgetItem(label))
+        for _key, label, icon in NAV_ITEMS:
+            self.nav.addItem(QListWidgetItem(f"  {icon}    {label}"))
         self.nav.setCurrentRow(0)
         side_layout.addWidget(self.nav, 1)
+
+        version_lbl = QLabel("voxless · 0.1.3")
+        version_lbl.setStyleSheet("color:#a1a1a6; font-size:10px; padding:8px 18px 12px 18px;")
+        version_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        side_layout.addWidget(version_lbl)
 
         root_layout.addWidget(sidebar)
 

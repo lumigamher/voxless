@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.3 — 2026-05-08
+
+- **Hotkey recorder widget**. Click "Tecla" in **General**, then press the key (or combination) you want — voxless captures and stores the right pynput spec automatically. Distinguishes left/right Option / Cmd / Ctrl / Shift via native virtual key codes (Mac and Windows). Esc cancels capture.
+- **Smarter Accessibility / Microphone request flow**. Each macOS permission now offers a "Solicitar acceso" button that fires the system prompt directly via `AXIsProcessTrustedWithOptions` (Accessibility) or `AVCaptureDevice.requestAccess` (Microphone) — no more hunting through System Settings. The "Abrir ajustes" deep-link is still available as a fallback.
+- **macOS-style UI polish**: SF Pro / system font, sidebar with iconography per nav item, tighter spacing, version string footer, refined hover/selected states for nav, friendlier hotkey display ("⌥ Right" instead of "right_option").
+
 ## v0.1.2 — 2026-05-08
 
 - **New page: Permisos**. Detects Accessibility, Input Monitoring, and Microphone status (granted / falta / desconocido) and exposes one-click buttons to open the matching System Settings pane. Refreshes automatically when the page is shown and on demand.

@@ -26,6 +26,8 @@ class Permission:
     description: str
     detect: Callable[[], Status]
     open_settings: Callable[[], None]
+    request: Callable[[], None] | None = None
+    request_label: str = "Solicitar acceso"
 
 
 def _open_url(url: str) -> None:
@@ -78,6 +80,26 @@ def _macos_input_monitoring() -> Status:
         return "unknown"
 
 
+def _request_macos_accessibility() -> None:
+    try:
+        from ApplicationServices import AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt
+        AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
+    except Exception:
+        log.exception("AXIsProcessTrustedWithOptions failed; opening Settings as fallback")
+        _open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+
+
+def _request_macos_microphone() -> None:
+    try:
+        from AVFoundation import AVCaptureDevice, AVMediaTypeAudio  # type: ignore
+        AVCaptureDevice.requestAccessForMediaType_completionHandler_(
+            AVMediaTypeAudio, lambda granted: log.info("Mic access granted=%s", granted)
+        )
+    except Exception:
+        log.exception("AVCaptureDevice.requestAccess failed; opening Settings as fallback")
+        _open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+
+
 def _macos_microphone() -> Status:
     try:
         from AVFoundation import AVCaptureDevice, AVMediaTypeAudio  # type: ignore
@@ -114,6 +136,8 @@ def list_permissions() -> list[Permission]:
                 description="Necesario para escuchar el hotkey global y simular ⌘V al pegar.",
                 detect=_macos_accessibility,
                 open_settings=_open_mac("Privacy_Accessibility"),
+                request=_request_macos_accessibility,
+                request_label="Solicitar acceso",
             ),
             Permission(
                 key="input_monitoring",
@@ -128,6 +152,8 @@ def list_permissions() -> list[Permission]:
                 description="Para grabar tu dictado y transcribirlo localmente.",
                 detect=_macos_microphone,
                 open_settings=_open_mac("Privacy_Microphone"),
+                request=_request_macos_microphone,
+                request_label="Solicitar acceso",
             ),
         ]
     if sys.platform.startswith("win"):
