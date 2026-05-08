@@ -83,26 +83,51 @@ class App:
         try:
             new_cfg = load_config()
         except Exception:
-            log.exception("Failed to reload config")
+            log.exception("Failed to reload config — keeping previous values")
             return
+
+        old_cfg = self._cfg
         self._cfg = new_cfg
+
         try:
-            self._llm = OllamaClient(new_cfg.ollama)
-            self._paster = Paster(new_cfg.paste)
+            if (
+                old_cfg.ollama.url != new_cfg.ollama.url
+                or old_cfg.ollama.timeout_s != new_cfg.ollama.timeout_s
+                or old_cfg.ollama.enabled != new_cfg.ollama.enabled
+                or old_cfg.ollama.model != new_cfg.ollama.model
+                or old_cfg.ollama.temperature != new_cfg.ollama.temperature
+            ):
+                self._llm = OllamaClient(new_cfg.ollama)
         except Exception:
-            log.exception("Failed to apply runtime config")
-        if (
-            self._transcriber.model_name != new_cfg.whisper.model
-            or self._transcriber.compute_type != new_cfg.whisper.compute_type
-        ):
-            try:
+            log.exception("Failed to swap Ollama client — keeping previous")
+
+        try:
+            if (
+                old_cfg.paste.auto_paste != new_cfg.paste.auto_paste
+                or old_cfg.paste.paste_delay_ms != new_cfg.paste.paste_delay_ms
+                or old_cfg.paste.restore_clipboard != new_cfg.paste.restore_clipboard
+            ):
+                self._paster = Paster(new_cfg.paste)
+        except Exception:
+            log.exception("Failed to swap Paster — keeping previous")
+
+        try:
+            if (
+                self._transcriber.model_name != new_cfg.whisper.model
+                or self._transcriber.compute_type != new_cfg.whisper.compute_type
+            ):
                 self._transcriber = Transcriber(new_cfg.whisper)
-            except Exception:
-                log.exception("Failed to swap whisper model")
-        try:
-            self._hotkey.update(new_cfg.hotkey)
         except Exception:
-            log.exception("Failed to rebind hotkey")
+            log.exception("Failed to swap Whisper transcriber — keeping previous")
+
+        try:
+            if old_cfg.hotkey != new_cfg.hotkey:
+                self._hotkey.update(new_cfg.hotkey)
+                log.info("Hotkey rebound: %s -> %s", old_cfg.hotkey, new_cfg.hotkey)
+        except Exception:
+            log.exception("Failed to rebind hotkey — keeping previous")
+
+        log.info("Config reloaded")
 
     def reload_prompt(self) -> None:
         try:

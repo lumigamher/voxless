@@ -7,6 +7,7 @@ import signal
 import sys
 
 from PySide6.QtCore import QTimer
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication
 
 from .app import App
@@ -14,6 +15,47 @@ from .config import ensure_user_files, load_config
 from .logging_setup import setup_logging
 from .tray import Tray
 from .ui_window import MainWindow
+
+SINGLE_INSTANCE_KEY = "voxless-single-instance-v1"
+
+
+def _try_send_show_to_existing() -> bool:
+    """If another voxless instance is running, ping it to show the window
+    and return True so we can exit. Otherwise return False."""
+    sock = QLocalSocket()
+    sock.connectToServer(SINGLE_INSTANCE_KEY)
+    if sock.waitForConnected(300):
+        sock.write(b"show\n")
+        sock.flush()
+        sock.waitForBytesWritten(300)
+        sock.disconnectFromServer()
+        return True
+    return False
+
+
+def _start_single_instance_server(on_show) -> QLocalServer:
+    QLocalServer.removeServer(SINGLE_INSTANCE_KEY)
+    server = QLocalServer()
+    server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
+
+    def _on_new_connection() -> None:
+        client = server.nextPendingConnection()
+        if client is None:
+            return
+
+        def _on_ready_read() -> None:
+            try:
+                _ = bytes(client.readAll())
+            except Exception:
+                pass
+            on_show()
+            client.disconnectFromServer()
+
+        client.readyRead.connect(_on_ready_read)
+
+    server.newConnection.connect(_on_new_connection)
+    server.listen(SINGLE_INSTANCE_KEY)
+    return server
 
 
 def main() -> int:
@@ -26,7 +68,7 @@ def main() -> int:
         return 1
 
     log.info(
-        "Starting voxless 0.1.0 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.1.1 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",
@@ -37,6 +79,10 @@ def main() -> int:
     qt_app.setApplicationDisplayName("voxless")
     qt_app.setOrganizationName("voxless")
     qt_app.setQuitOnLastWindowClosed(False)
+
+    if _try_send_show_to_existing():
+        log.info("Another voxless instance is running — bringing it to front and exiting.")
+        return 0
 
     backend = App(cfg)
     window = MainWindow(cfg)
@@ -65,6 +111,8 @@ def main() -> int:
 
     tray = Tray(on_quit=_on_quit, on_show_window=_show_window)
 
+    instance_server = _start_single_instance_server(_show_window)
+
     peak_timer = QTimer()
     peak_timer.setInterval(33)
 
@@ -82,7 +130,9 @@ def main() -> int:
 
     backend.start_background()
     _show_window()
-    return qt_app.exec()
+    rc = qt_app.exec()
+    instance_server.close()
+    return rc
 
 
 if __name__ == "__main__":

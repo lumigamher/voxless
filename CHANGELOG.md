@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.1 — 2026-05-08
+
+- **Single-instance lock** via `QLocalServer`. A second launch now brings the existing window to front and exits, instead of spawning a duplicate.
+- **Hide dock icon on macOS** (`LSUIElement: True`). voxless now lives only in the system tray, like Typeless.
+- **Prohibit multiple `.app` instances** (`LSMultipleInstancesProhibited: True`).
+- **Defensive config reload**. Saving settings no longer rebinds the global hotkey (or recreates Whisper / Ollama / Paster) unless those specific values actually changed. Fixes app self-restarting after Save.
+
 ## v0.1.0 — 2026-05-08
 
 Initial release.
