@@ -24,6 +24,18 @@ Download a pre-built release for your OS from the [Releases page](https://github
 - **macOS (Apple Silicon)**: `voxless-macos-arm64.dmg` — drag `voxless.app` to Applications.
 - **Windows (x64)**: `voxless-windows-x64.zip` — extract anywhere, run `voxless.exe`.
 
+### macOS: "no pudo validar la seguridad" / "cannot be opened because Apple cannot check it for malicious software"
+
+The binary is ad-hoc signed but **not** notarized (Apple Developer ID + notarization costs $99/yr; PRs welcome). Browsers add a quarantine flag on download that Gatekeeper blocks. Strip it once:
+
+```bash
+xattr -d com.apple.quarantine ~/Downloads/voxless-macos-arm64.dmg
+# install the .app, then if it still gets blocked:
+xattr -cr /Applications/voxless.app
+```
+
+Or right-click the DMG (or app) → **Open** — Gatekeeper shows an extra "Open" button that double-click hides.
+
 You also need [Ollama](https://ollama.com) running locally with at least one model:
 
 ```bash
