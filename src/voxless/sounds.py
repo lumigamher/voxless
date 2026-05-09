@@ -1,7 +1,7 @@
-"""Tiny synthesized feedback sounds — bubble-plop start, soft thud stop.
+"""Tiny synthesized feedback sounds — clean, percussive UI clicks.
 
-Played non-blocking through sounddevice on the user's default audio output.
-Synth lives in pure numpy so we don't bundle any audio assets.
+Synth lives in pure numpy so we don't bundle any audio assets. Plays
+non-blocking through sounddevice on the user's default audio output.
 """
 
 from __future__ import annotations
@@ -16,35 +16,42 @@ log = logging.getLogger(__name__)
 SAMPLE_RATE = 44_100
 
 
-def _bubble(freq_start: float, freq_end: float,
-            duration: float = 0.14, gain: float = 0.45) -> np.ndarray:
-    """A short wet "plop" — sine sweep with exponential decay + soft attack."""
+def _click(freq: float,
+           duration: float = 0.07,
+           attack_ms: float = 1.5,
+           decay_ms: float = 30.0,
+           gain: float = 0.32,
+           harmonic_mix: float = 0.18) -> np.ndarray:
+    """A short percussive click — clean sine + a tiny amount of 2nd
+    harmonic for sparkle. Tight attack-decay envelope keeps it
+    crisp instead of bubble-like."""
     n = int(SAMPLE_RATE * duration)
     t = np.linspace(0.0, duration, n, endpoint=False, dtype=np.float32)
 
-    # frequency glide — exponential interpolation feels more organic
-    freq = freq_start * np.power(freq_end / freq_start, t / duration)
-    phase = 2.0 * np.pi * np.cumsum(freq) / SAMPLE_RATE
-
+    phase = 2.0 * np.pi * freq * t
     fundamental = np.sin(phase)
-    second = 0.30 * np.sin(2.0 * phase)
-    third = 0.10 * np.sin(3.0 * phase)
-    wave = fundamental + second + third
+    second = np.sin(2.0 * phase) * harmonic_mix
+    wave = fundamental + second
 
-    attack = 1.0 - np.exp(-t / 0.004)         # 4 ms attack
-    decay = np.exp(-t / 0.045)                 # 45 ms decay
+    attack = 1.0 - np.exp(-t / (attack_ms / 1000.0))
+    decay = np.exp(-t / (decay_ms / 1000.0))
     envelope = (attack * decay).astype(np.float32)
 
     return (wave * envelope * gain).astype(np.float32)
 
 
-_START = _bubble(180.0, 320.0, duration=0.14, gain=0.42)
-_STOP  = _bubble(320.0, 160.0, duration=0.16, gain=0.38)
+# Start: short, slightly higher pitch — feels like turning ON.
+_START = _click(freq=720.0, duration=0.06, attack_ms=1.0,
+                decay_ms=22.0, gain=0.30)
+
+# Stop: half-step lower, slightly longer decay — feels like releasing.
+_STOP = _click(freq=540.0, duration=0.07, attack_ms=1.0,
+               decay_ms=28.0, gain=0.28)
 
 
 def _play(sample: np.ndarray) -> None:
     try:
-        import sounddevice as sd  # local import — heavy dep
+        import sounddevice as sd
         sd.play(sample, samplerate=SAMPLE_RATE, blocking=False)
     except Exception:
         log.exception("Failed to play feedback sound")

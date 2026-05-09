@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.7 — 2026-05-09
+
+- **Cleaner feedback sounds**. Replaced the gluey "bubble plop" with crisp percussive clicks: pure sine + a hint of 2nd harmonic, tight attack-decay envelope. Start at 720 Hz (60 ms), stop at 540 Hz (70 ms) — feels like a real on/off, not a kid's app.
+
 ## v0.2.6 — 2026-05-09
 
 Architectural fix for the recurring "voxless takes focus / opens its window" bug.
