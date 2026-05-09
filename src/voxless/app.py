@@ -146,13 +146,14 @@ class App:
         self.signals.state_changed.emit(state)
 
     def _run_watchdog(self) -> None:
-        """Background watchdog: if state is stuck in recording or
-        processing for > 20s the system is wedged (missed release event,
-        AppKit deadlock, etc). Force a synthetic release / reset."""
-        while not self._stop.wait(2.0):
+        """Background watchdog: if state is stuck in recording for more
+        than ~90s the system is probably wedged (pynput missed a release,
+        AppKit deadlock, the user walked away mid-dictation, etc). Force
+        a synthetic release so the state machine recovers."""
+        while not self._stop.wait(5.0):
             if self._state == "recording" and self._record_started_at is not None:
                 age = time.monotonic() - self._record_started_at
-                if age > 20.0:
+                if age > 90.0:
                     log.warning("watchdog: stuck recording for %.1fs — forcing release", age)
                     try:
                         self._events.put("release")

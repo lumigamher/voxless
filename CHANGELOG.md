@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.2 — 2026-05-09
+
+- **Watchdog threshold raised from 20 s → 90 s**. The user is dictating, not training Morse — long pauses + long sentences are normal and shouldn't trigger a forced release. 90 s still catches genuinely wedged sessions while letting natural speech run free.
+- **Prompt: never answer questions in the dictation**. New rule + four worked examples making it explicit that questions in the input must be returned as cleaned questions, never answered. Fixes the case where the user dictated "what is X" and Ollama replied with the answer instead of the cleaned-up question text.
+
 ## v0.3.1 — 2026-05-09
 
 - **Lowest-level event guard on the main window**. Override `event()` so we intercept *every* Qt event — including `QEvent.Show`, `QEvent.ShowToParent`, and `QEvent.WindowActivate`. Any unauthorized show is dropped and the window is hidden on the next event-loop tick. Catches paths that bypass `showEvent` via the native C++ side (Qt's reopen handler, etc).
