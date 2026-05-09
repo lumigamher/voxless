@@ -59,6 +59,54 @@ def get_frontmost() -> Any:
     return None
 
 
+def deactivate_self() -> bool:
+    """Hide voxless if it's currently in the foreground so macOS hands
+    focus back to the previously-active app. Cmd+V then lands there.
+
+    This is more reliable than capture-and-restore because it leans on
+    the OS to pick the right "next app" for us, instead of guessing
+    which app/window/PID had focus when the hotkey fired."""
+    if sys.platform == "darwin":
+        try:
+            from AppKit import NSApplication, NSWorkspace  # type: ignore
+            ws = NSWorkspace.sharedWorkspace()
+            front = ws.frontmostApplication()
+            if front is None:
+                return False
+            bundle = (front.bundleIdentifier() or "").lower()
+            pid = int(front.processIdentifier())
+            if pid != _own_pid() and "voxless" not in bundle:
+                # Not us — leave focus alone.
+                return False
+            # We're the frontmost app. Hide ourselves; macOS will give
+            # focus to whatever the user was previously in.
+            NSApplication.sharedApplication().hide_(None)
+            return True
+        except Exception:
+            log.debug("deactivate_self: hide_ failed", exc_info=True)
+            return False
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetForegroundWindow()
+            if hwnd == 0:
+                return False
+            length = user32.GetWindowTextLengthW(hwnd) + 1
+            buf = ctypes.create_unicode_buffer(length)
+            user32.GetWindowTextW(hwnd, buf, length)
+            if "voxless" not in (buf.value or "").lower():
+                return False
+            # SW_MINIMIZE = 6 — minimizing returns focus to the next
+            # window in z-order.
+            user32.ShowWindow(hwnd, 6)
+            return True
+        except Exception:
+            log.debug("deactivate_self: minimize failed", exc_info=True)
+            return False
+    return False
+
+
 def is_voxless_frontmost() -> bool:
     """True if voxless itself currently owns the focused app — meaning we
     almost certainly stole focus and need to put it back before pasting."""

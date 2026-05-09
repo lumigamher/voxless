@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.3 — 2026-05-08
+
+Two critical fixes from user testing.
+
+- **No more "stuck in REC"**. The release-event handler is now wrapped in a `try / finally` that guarantees the state machine returns to `idle` no matter what fails inside (Whisper hang, Ollama timeout, paste error). Recorder.start() also force-cleans any leftover stream from a prior aborted session, so a second hotkey press always opens a clean input.
+- **Voxless never re-opens its window after transcription**. Replaced the capture-and-restore-frontmost dance with `frontmost.deactivate_self()`: if voxless is in the foreground at paste-time, we hide ourselves with `NSApplication.hide_(None)` (macOS) / `ShowWindow(SW_MINIMIZE)` (Windows). The OS hands focus back to whatever app the user was previously in, and `Cmd+V` / `Ctrl+V` lands there. We never call `activate` on a captured PID — that was the path that occasionally re-summoned our own main window.
+
 ## v0.2.2 — 2026-05-08
 
 - **Spanish / English UI**. New `i18n` module with the full string catalog. New row in **General** to switch language; saved to config (`ui_language`). The whole app — sidebar, page headers, settings rows, button labels, status text, toasts, permission badges, hero copy — flips on save (next launch is fully bilingual; the current session updates everything reachable from the toast).

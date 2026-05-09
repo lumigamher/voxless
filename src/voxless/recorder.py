@@ -36,19 +36,31 @@ class Recorder:
                 self._chunks.append(indata.copy())
 
     def start(self) -> None:
-        if self._is_recording:
-            return
+        # Force-clean any leftover stream from a prior aborted session.
+        if self._stream is not None:
+            try:
+                self._stream.stop()
+                self._stream.close()
+            except Exception:
+                log.debug("Cleanup of stale stream raised", exc_info=True)
+            self._stream = None
         with self._lock:
             self._chunks = []
             self._is_recording = True
-        self._stream = sd.InputStream(
-            samplerate=self._sample_rate,
-            channels=CHANNELS,
-            dtype=DTYPE,
-            callback=self._callback,
-        )
-        self._stream.start()
-        log.debug("Recording started")
+        try:
+            self._stream = sd.InputStream(
+                samplerate=self._sample_rate,
+                channels=CHANNELS,
+                dtype=DTYPE,
+                callback=self._callback,
+            )
+            self._stream.start()
+            log.debug("Recording started")
+        except Exception:
+            log.exception("Failed to open input stream")
+            with self._lock:
+                self._is_recording = False
+            raise
 
     def stop(self) -> np.ndarray:
         if not self._is_recording:

@@ -50,7 +50,6 @@ class App:
         self._llm = OllamaClient(cfg.ollama)
         self._paster = Paster(cfg.paste)
         self._prompt = load_prompt()
-        self._frontmost = None
 
         self.signals = AppSignals()
 
@@ -178,8 +177,8 @@ class App:
 
         if event == "press":
             if self._state != "idle":
+                log.debug("press ignored — state=%s", self._state)
                 return
-            self._frontmost = frontmost.get_frontmost()
             self._recorder.start()
             self._record_started_at = time.monotonic()
             self._set_state("recording")
@@ -190,45 +189,47 @@ class App:
         if event == "release":
             if self._state != "recording":
                 return
-            audio = self._recorder.stop()
-            if self._cfg.sound_feedback:
-                sounds.play_stop()
-            duration_ms = int((time.monotonic() - (self._record_started_at or 0)) * 1000)
-            self._record_started_at = None
+            # try/finally guarantees we always return to idle, even if
+            # transcription / Ollama / paste raises. No more "stuck in REC".
+            try:
+                audio = self._recorder.stop()
+                if self._cfg.sound_feedback:
+                    sounds.play_stop()
+                duration_ms = int(
+                    (time.monotonic() - (self._record_started_at or 0)) * 1000
+                )
+                self._record_started_at = None
 
-            min_ms = self._cfg.min_record_ms
-            if duration_ms < min_ms or audio.size < SAMPLE_RATE * min_ms / 1000:
-                log.info("Ignoring short recording (%dms)", duration_ms)
+                min_ms = self._cfg.min_record_ms
+                if duration_ms < min_ms or audio.size < SAMPLE_RATE * min_ms / 1000:
+                    log.info("Ignoring short recording (%dms)", duration_ms)
+                    return
+
+                self._set_state("processing")
+                text_raw = self._transcriber.transcribe(audio)
+                if not text_raw:
+                    return
+                log.info("Transcribed: %s", text_raw)
+
+                text_clean = (
+                    self._llm.clean(text_raw, self._prompt)
+                    if self._cfg.ollama.enabled
+                    else text_raw
+                )
+                log.info("Cleaned: %s", text_clean)
+
+                self.signals.transcribed.emit(text_raw, text_clean)
+
+                # If voxless somehow stole focus while we were transcribing,
+                # hide ourselves so macOS / Windows hands focus back to the
+                # previously-active app. Don't capture/restore by handle —
+                # the OS picks the right "next app" more reliably than us.
+                try:
+                    if frontmost.deactivate_self():
+                        time.sleep(0.18)
+                except Exception:
+                    log.exception("deactivate_self failed; pasting anyway")
+
+                self._paster.paste(text_clean)
+            finally:
                 self._set_state("idle")
-                return
-
-            self._set_state("processing")
-            text_raw = self._transcriber.transcribe(audio)
-            if not text_raw:
-                self._set_state("idle")
-                return
-            log.info("Transcribed: %s", text_raw)
-
-            text_clean = (
-                self._llm.clean(text_raw, self._prompt)
-                if self._cfg.ollama.enabled
-                else text_raw
-            )
-            log.info("Cleaned: %s", text_clean)
-
-            self.signals.transcribed.emit(text_raw, text_clean)
-
-            # Only restore the captured app if voxless is currently in the
-            # foreground — otherwise the user is already in their target
-            # app and we should leave focus exactly where it is (preserves
-            # cursor position inside whatever input they clicked).
-            if (
-                self._frontmost is not None
-                and frontmost.is_voxless_frontmost()
-            ):
-                log.info("voxless took focus — restoring previous app before paste")
-                frontmost.restore(self._frontmost)
-                time.sleep(0.15)
-            self._paster.paste(text_clean)
-            self._frontmost = None
-            self._set_state("idle")
