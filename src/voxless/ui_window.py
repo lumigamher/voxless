@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import ai_actions
 from .config import Config, save_config, save_prompt
 from .permissions import Permission, list_permissions
 from .prompts import load_prompt
@@ -1039,6 +1040,12 @@ class GeneralPage(QWidget):
                           "Reproducir un click sutil al iniciar y detener.",
                           self.sound))
 
+        self.overlay_chk = QCheckBox("ENABLED")
+        self.overlay_chk.setChecked(cfg.show_overlay)
+        bl.addWidget(_row("05", "Widget flotante",
+                          "Pill discreta abajo-centro de la pantalla mientras grabas.",
+                          self.overlay_chk))
+
         outer.addWidget(_scrollable(body), 1)
         outer.addWidget(_save_bar(self._save))
 
@@ -1047,6 +1054,7 @@ class GeneralPage(QWidget):
         self._cfg.hotkey_mode = self.mode_combo.currentData()
         self._cfg.min_record_ms = int(self.min_ms.value())
         self._cfg.sound_feedback = self.sound.isChecked()
+        self._cfg.show_overlay = self.overlay_chk.isChecked()
         self._on_save(self._cfg)
 
 
@@ -1213,6 +1221,8 @@ class PromptPage(QWidget):
 
 
 class HistoryPage(QWidget):
+    ai_action_requested = Signal(str, object)  # text, AiAction
+
     def __init__(self) -> None:
         super().__init__()
         outer = QVBoxLayout(self)
@@ -1221,7 +1231,7 @@ class HistoryPage(QWidget):
         outer.addWidget(_page_header(
             "§ 07 · LEDGER",
             "Historial",
-            "Últimas transcripciones de esta sesión (máx. 100). Doble click copia.",
+            "Últimas transcripciones de esta sesión (máx. 100). Doble click copia · click derecho para acciones IA.",
         ))
 
         body = QFrame()
@@ -1233,15 +1243,84 @@ class HistoryPage(QWidget):
         self.list.setObjectName("History")
         self.list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.list.itemDoubleClicked.connect(self._copy_selected)
+        self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(self._open_context_menu)
         bl.addWidget(self.list, 1)
 
         actions = QHBoxLayout()
         actions.addStretch(1)
         actions.addWidget(default_btn("Copiar", self._copy_selected))
+        actions.addWidget(self._ai_button())
         actions.addWidget(default_btn("Limpiar", self.list.clear))
         bl.addLayout(actions)
 
         outer.addWidget(body, 1)
+
+    def _ai_button(self) -> QPushButton:
+        btn = primary_btn("Acciones IA")
+        btn.clicked.connect(lambda: self._open_ai_menu(btn))
+        return btn
+
+    def _open_ai_menu(self, anchor: QWidget) -> None:
+        from PySide6.QtWidgets import QMenu
+        if not self.list.currentItem():
+            return
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background: #18181b;
+                color: #fafafa;
+                border: 1px solid #27272a;
+                border-radius: 8px;
+                padding: 4px;
+                font-family: "SF Mono", "Menlo", monospace;
+                font-size: 11px;
+            }}
+            QMenu::item {{ padding: 8px 14px; border-radius: 4px; }}
+            QMenu::item:selected {{ background: {ACCENT}; }}
+        """)
+        for action in ai_actions.ALL:
+            menu_action = menu.addAction(action.label)
+            menu_action.triggered.connect(
+                lambda _checked=False, a=action: self._dispatch(a)
+            )
+        menu.exec(anchor.mapToGlobal(anchor.rect().bottomLeft()))
+
+    def _open_context_menu(self, point) -> None:
+        item = self.list.itemAt(point)
+        if item is None:
+            return
+        self.list.setCurrentItem(item)
+        from PySide6.QtWidgets import QMenu
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background: #18181b;
+                color: #fafafa;
+                border: 1px solid #27272a;
+                border-radius: 8px;
+                padding: 4px;
+                font-family: "SF Mono", "Menlo", monospace;
+                font-size: 11px;
+            }}
+            QMenu::item {{ padding: 8px 14px; border-radius: 4px; }}
+            QMenu::item:selected {{ background: {ACCENT}; }}
+            QMenu::separator {{ height: 1px; background: #27272a; margin: 4px 8px; }}
+        """)
+        copy_act = menu.addAction("Copiar")
+        copy_act.triggered.connect(self._copy_selected)
+        menu.addSeparator()
+        for action in ai_actions.ALL:
+            ma = menu.addAction(action.label)
+            ma.triggered.connect(lambda _c=False, a=action: self._dispatch(a))
+        menu.exec(self.list.viewport().mapToGlobal(point))
+
+    def _dispatch(self, action) -> None:
+        item = self.list.currentItem()
+        if not item:
+            return
+        text = item.data(Qt.ItemDataRole.UserRole) or item.text()
+        self.ai_action_requested.emit(text, action)
 
     def push(self, raw: str, clean: str) -> None:
         if self.list.count() >= 100:
@@ -1426,7 +1505,7 @@ class MainWindow(QMainWindow):
         self.nav.setCurrentRow(0)
         side.addWidget(self.nav, 1)
 
-        version_lbl = QLabel("v 0.1.8 · LOCAL")
+        version_lbl = QLabel("v 0.1.9 · LOCAL")
         version_lbl.setObjectName("VersionFooter")
         side.addWidget(version_lbl)
 

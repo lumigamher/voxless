@@ -21,6 +21,7 @@ from .llm import OllamaClient
 from .paster import Paster
 from .prompts import load_prompt
 from .recorder import SAMPLE_RATE, Recorder
+from . import sounds
 from .transcriber import Transcriber
 
 log = logging.getLogger(__name__)
@@ -180,12 +181,16 @@ class App:
             self._recorder.start()
             self._record_started_at = time.monotonic()
             self._set_state("recording")
+            if self._cfg.sound_feedback:
+                sounds.play_start()
             return
 
         if event == "release":
             if self._state != "recording":
                 return
             audio = self._recorder.stop()
+            if self._cfg.sound_feedback:
+                sounds.play_stop()
             duration_ms = int((time.monotonic() - (self._record_started_at or 0)) * 1000)
             self._record_started_at = None
 

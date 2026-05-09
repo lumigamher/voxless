@@ -32,6 +32,7 @@ hotkey = "right_option"
 hotkey_mode = "hold"
 min_record_ms = 250
 sound_feedback = false
+show_overlay = true
 
 [whisper]
 model = "small"
@@ -82,6 +83,7 @@ class Config(BaseModel):
     hotkey_mode: HotkeyMode = "hold"
     min_record_ms: int = Field(250, ge=0)
     sound_feedback: bool = False
+    show_overlay: bool = True
     whisper: WhisperConfig = Field(default_factory=WhisperConfig)
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     paste: PasteConfig = Field(default_factory=PasteConfig)
@@ -131,6 +133,7 @@ def save_config(cfg: Config, path: Path | None = None) -> None:
         f"hotkey_mode = {_toml_value(cfg.hotkey_mode)}",
         f"min_record_ms = {cfg.min_record_ms}",
         f"sound_feedback = {_toml_value(cfg.sound_feedback)}",
+        f"show_overlay = {_toml_value(cfg.show_overlay)}",
         "",
         "[whisper]",
         f"model = {_toml_value(cfg.whisper.model)}",

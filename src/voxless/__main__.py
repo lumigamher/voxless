@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication
 from .app import App
 from .config import ensure_user_files, load_config
 from .logging_setup import setup_logging
+from .overlay import RecorderOverlay
 from .tray import Tray
 from .ui_window import MainWindow
 
@@ -68,7 +69,7 @@ def main() -> int:
         return 1
 
     log.info(
-        "Starting voxless 0.1.8 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.1.9 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",
@@ -87,10 +88,15 @@ def main() -> int:
 
     backend = App(cfg)
     window = MainWindow(cfg)
+    overlay = RecorderOverlay()
 
     def _on_state(state: str) -> None:
         window.set_state(state)
         tray.set_state(state)
+        if backend._cfg.show_overlay:
+            overlay.set_state(state)
+        else:
+            overlay.hide()
 
     def _on_transcribed(raw: str, clean: str) -> None:
         window.push_history(raw, clean)
@@ -110,6 +116,27 @@ def main() -> int:
     window.config_changed.connect(lambda _cfg: backend.reload_config())
     window.prompt_changed.connect(lambda _t: backend.reload_prompt())
 
+    def _on_ai_action(text: str, action) -> None:
+        import threading
+        from PySide6.QtCore import QMetaObject, Q_ARG
+        from PySide6.QtWidgets import QApplication
+
+        def run() -> None:
+            try:
+                result = backend._llm.transform(text, action.system_prompt)
+            except Exception:
+                log.exception("AI action failed")
+                window.show_toast(f"FALLÓ · {action.short}", variant="error")
+                return
+            QApplication.clipboard().setText(result)
+            window.show_toast(f"{action.short} · COPIADO AL PORTAPAPELES")
+            window.history_page.push(text, result)
+
+        window.show_toast(f"PROCESANDO · {action.short}…", variant="info")
+        threading.Thread(target=run, daemon=True).start()
+
+    window.history_page.ai_action_requested.connect(_on_ai_action)
+
     tray = Tray(on_quit=_on_quit, on_show_window=_show_window)
 
     instance_server = _start_single_instance_server(_show_window)
@@ -123,6 +150,8 @@ def main() -> int:
         except Exception:
             return
         window.push_audio_peak(peak)
+        if backend._cfg.show_overlay:
+            overlay.push_peak(peak)
 
     peak_timer.timeout.connect(_push_peak)
     peak_timer.start()

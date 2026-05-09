@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.9 — 2026-05-08
+
+- **AI actions on history items**. Right-click any transcription (or click "ACCIONES IA" with a row selected) for: Mejorar redacción, Resumir, Tono formal, Tono casual, Traducir a inglés / a español. Each runs through Ollama with a dedicated system prompt and copies the result to your clipboard with a toast confirmation.
+- **No more "Bien, aquí tienes…" preamble**. Default cleanup prompt rewritten with explicit forbidden-openings list + extra few-shot examples. Added a regex-based post-processor in OllamaClient that strips conversational preamble + wrapping quotes even when the model defies instructions.
+- **Bubble-plop feedback sounds**. Synthesized in pure numpy (no bundled assets) — a wet rising plop on start (180 → 320 Hz, 14 ms attack, exponential decay) and a softer falling plop on stop (320 → 160 Hz). Plays through the default audio output, non-blocking. Toggle in **General → Sonido al grabar**.
+- **Floating recorder overlay**. A discreet pill anchored to the bottom-center of the primary screen shows live state (REC dot pulse + 7-bar mini meter while recording, "WRITING" while Ollama is processing). Frameless, always-on-top, doesn't take focus, fades in/out. Toggle in **General → Widget flotante**.
+- **Tighter Whisper transcription**. Wider beam (8), best-of (5), multi-temperature fallback `[0, 0.2, 0.4, 0.6, 0.8]`, `condition_on_previous_text=False`, generous VAD padding (`min_silence_duration_ms=500`, `speech_pad_ms=400`), and a small Spanish vocabulary `initial_prompt` to anchor common dictation phrases. Should reduce both hallucinations and word loss.
+- **Inline-styled buttons across the UI** — primary buttons render as solid black with white text everywhere (Guardar cambios / Guardar prompt / Solicitar acceso); secondaries as paper with dark text and a real border. Cascade-proof.
+- **Sharper app icon** with a thicker italic v + amber dash (regenerated icns/ico).
+
 ## v0.1.8 — 2026-05-08
 
 - **Truly bulletproof "Guardar cambios"**. Inline stylesheets on every primary/default button (overrides app-level QSS, immune to cascade quirks). Pure black background + pure white text on the primary action — no more invisible labels.
