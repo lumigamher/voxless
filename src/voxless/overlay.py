@@ -1,8 +1,7 @@
-"""Floating recording indicator — frameless, always-on-top pill anchored to
-the bottom-center of the primary screen.
+"""Floating Nothing-style glyph indicator — frameless, always-on-top pill
+anchored to the bottom-center of the primary screen.
 
-Shows live state: REC dot pulses + mini waveform during recording, "WRITING"
-during processing. Hides on idle (with a soft fade-out).
+Pure black + white + Nothing red. Pixel LED meter, square dot, monospace.
 """
 
 from __future__ import annotations
@@ -14,35 +13,36 @@ from PySide6.QtCore import (
     Qt,
     QTimer,
 )
-from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
+from PySide6.QtGui import QColor, QGuiApplication, QPainter
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
-ACCENT = "#dc2626"
-AMBER  = "#c2410c"
+ACCENT = "#ff3636"
+INK    = "#ffffff"
+BG     = "#000000"
+DIM    = "#525252"
 
 STATE_LABEL = {
     "idle": "READY",
     "recording": "REC",
-    "processing": "WRITING",
+    "processing": "WRITE",
     "error": "ERROR",
 }
 
 STATE_DOT = {
-    "idle": "#10b981",
+    "idle": "#5fdb5f",
     "recording": ACCENT,
-    "processing": AMBER,
+    "processing": "#ffaa00",
     "error": ACCENT,
 }
 
 
-class _MiniDot(QWidget):
+class _PixelDot(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setFixedSize(10, 10)
@@ -63,30 +63,31 @@ class _MiniDot(QWidget):
 
     def _tick(self) -> None:
         self._pulse += 0.07 * self._dir
-        if self._pulse >= 1.0:
-            self._pulse = 1.0; self._dir = -1.0
-        elif self._pulse <= 0.0:
-            self._pulse = 0.0; self._dir = 1.0
+        if self._pulse >= 1.0: self._pulse = 1.0; self._dir = -1.0
+        elif self._pulse <= 0.0: self._pulse = 0.0; self._dir = 1.0
         self.update()
 
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         if self._timer.isActive():
             halo = QColor(self._color); halo.setAlphaF(0.30 * self._pulse)
             p.setBrush(halo); p.setPen(Qt.PenStyle.NoPen)
-            p.drawEllipse(self.rect())
+            p.drawRect(self.rect())
         p.setBrush(self._color); p.setPen(Qt.PenStyle.NoPen)
-        p.drawEllipse(self.rect().adjusted(2, 2, -2, -2))
+        p.drawRect(self.rect().adjusted(2, 2, -2, -2))
 
 
-class _MiniBars(QWidget):
-    """7-bar mini meter."""
+class _PixelMeter(QWidget):
+    """Pixel-LED 5-row × 9-col meter."""
+
+    COLS = 9
+    ROWS = 5
 
     def __init__(self) -> None:
         super().__init__()
-        self.setFixedSize(70, 22)
-        self._levels = [0.0] * 7
+        self.setFixedSize(74, 26)
+        self._levels = [0.0] * self.COLS
         self._active = False
 
     def push(self, peak: float) -> None:
@@ -96,32 +97,35 @@ class _MiniBars(QWidget):
     def set_active(self, active: bool) -> None:
         self._active = active
         if not active:
-            self._levels = [0.0] * 7
+            self._levels = [0.0] * self.COLS
         self.update()
 
     def paintEvent(self, _e) -> None:
         p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         w, h = self.width(), self.height()
-        n = len(self._levels)
-        bar_w = 6
-        gap = 4
-        total = n * (bar_w + gap) - gap
-        x = (w - total) // 2
-        cy = h / 2
-        for level in self._levels:
-            color = QColor(ACCENT) if self._active else QColor("#525252")
-            if level > 0.85:
-                color = QColor("#f87171")
-            bh = max(3, int(level * (h - 6)))
-            p.setBrush(color); p.setPen(Qt.PenStyle.NoPen)
-            p.drawRoundedRect(x, int(cy - bh / 2), bar_w, bh, 1, 1)
-            x += bar_w + gap
+        cell_w = 6
+        cell_h = 4
+        gap = 1
+        total_w = self.COLS * (cell_w + gap) - gap
+        total_h = self.ROWS * (cell_h + gap) - gap
+        x0 = (w - total_w) // 2
+        y0 = (h - total_h) // 2
+
+        for c, level in enumerate(self._levels):
+            lit_rows = int(level * self.ROWS)
+            for r in range(self.ROWS):
+                cx = x0 + c * (cell_w + gap)
+                cy = y0 + (self.ROWS - 1 - r) * (cell_h + gap)
+                if r < lit_rows:
+                    color = QColor(ACCENT) if (r >= self.ROWS - 1 and self._active) else QColor(INK)
+                else:
+                    color = QColor("#1f1f1f")
+                p.setBrush(color); p.setPen(Qt.PenStyle.NoPen)
+                p.drawRect(cx, cy, cell_w, cell_h)
 
 
 class RecorderOverlay(QWidget):
-    """Floating pill that shows recording / processing state."""
-
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(
             parent,
@@ -136,45 +140,45 @@ class RecorderOverlay(QWidget):
 
         body = QFrame(self)
         body.setObjectName("OverlayBody")
-        body.setStyleSheet("""
-            #OverlayBody {
-                background: rgba(15, 12, 10, 0.92);
-                border: 1px solid rgba(255,255,255,0.08);
-                border-radius: 22px;
-            }
-            QLabel#OverlayState {
-                color: #fafafa;
+        body.setStyleSheet(f"""
+            #OverlayBody {{
+                background: {BG};
+                border: 1px solid #2a2a2a;
+                border-radius: 2px;
+            }}
+            QLabel#OverlayState {{
+                color: {INK};
                 font-family: "SF Mono", "Menlo", "Cascadia Mono", "Consolas", monospace;
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 0.18em;
-            }
-            QLabel#OverlayHint {
-                color: rgba(244, 240, 230, 0.55);
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 0.22em;
+            }}
+            QLabel#OverlayHint {{
+                color: {DIM};
                 font-family: "SF Mono", "Menlo", "Cascadia Mono", "Consolas", monospace;
                 font-size: 9px;
-                font-weight: 500;
-                letter-spacing: 0.10em;
-            }
+                font-weight: 600;
+                letter-spacing: 0.18em;
+            }}
         """)
         l = QHBoxLayout(body)
-        l.setContentsMargins(16, 10, 18, 10)
-        l.setSpacing(12)
+        l.setContentsMargins(18, 12, 22, 12)
+        l.setSpacing(14)
 
-        self._dot = _MiniDot()
+        self._dot = _PixelDot()
         l.addWidget(self._dot, 0, Qt.AlignmentFlag.AlignVCenter)
 
         text_col = QVBoxLayout()
-        text_col.setSpacing(0)
+        text_col.setSpacing(2)
         self._state_lbl = QLabel("READY")
         self._state_lbl.setObjectName("OverlayState")
         text_col.addWidget(self._state_lbl)
-        self._hint_lbl = QLabel("voxless")
+        self._hint_lbl = QLabel("VOXLESS")
         self._hint_lbl.setObjectName("OverlayHint")
         text_col.addWidget(self._hint_lbl)
         l.addLayout(text_col)
 
-        self._bars = _MiniBars()
+        self._bars = _PixelMeter()
         l.addWidget(self._bars, 0, Qt.AlignmentFlag.AlignVCenter)
 
         outer = QVBoxLayout(self)
@@ -185,7 +189,6 @@ class RecorderOverlay(QWidget):
         self._fade: QPropertyAnimation | None = None
         self._state = "idle"
 
-    # ── public API ──────────────────────────────────────────
     def set_state(self, state: str) -> None:
         self._state = state
         self._state_lbl.setText(STATE_LABEL.get(state, state.upper()))
@@ -200,7 +203,6 @@ class RecorderOverlay(QWidget):
         if self._state == "recording":
             self._bars.push(peak)
 
-    # ── animation helpers ───────────────────────────────────
     def _anchor_position(self) -> QPoint:
         screen = QGuiApplication.primaryScreen()
         if screen is None:

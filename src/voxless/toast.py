@@ -1,4 +1,4 @@
-"""Floating toast — editorial slip aesthetic."""
+"""Floating toast — Nothing-style square LED slip with red stripe."""
 
 from __future__ import annotations
 
@@ -23,11 +23,10 @@ from PySide6.QtWidgets import (
 
 ToastVariant = Literal["success", "error", "info"]
 
-# stripe + glyph + label color
 VARIANTS = {
-    "success": ("#16a34a", "✓", "OK"),
-    "error":   ("#dc2626", "!", "ERR"),
-    "info":    ("#c2410c", "i", "INFO"),
+    "success": ("#5fdb5f", "OK"),
+    "error":   ("#ff3636", "ERR"),
+    "info":    ("#ffaa00", "INFO"),
 }
 
 
@@ -43,34 +42,34 @@ class Toast(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
 
-        stripe, glyph, label = VARIANTS.get(variant, VARIANTS["info"])
+        stripe, label = VARIANTS.get(variant, VARIANTS["info"])
         self.setStyleSheet(
             f"""
             QFrame#ToastBody {{
-              background: #1a1614;
-              border: 1px solid #3d3733;
-              border-radius: 6px;
+              background: #000000;
+              border: 1px solid #2a2a2a;
+              border-radius: 2px;
             }}
             QLabel#ToastStripe {{
               background: {stripe};
-              border-top-left-radius: 6px;
-              border-bottom-left-radius: 6px;
               max-width: 4px;
               min-width: 4px;
+              border-radius: 0;
             }}
             QLabel#ToastLabel {{
               color: {stripe};
               font-family: "SF Mono", "Menlo", "JetBrains Mono", monospace;
-              font-size: 9px;
-              font-weight: 700;
-              letter-spacing: 0.20em;
+              font-size: 10px;
+              font-weight: 800;
+              letter-spacing: 0.22em;
             }}
             QLabel#ToastText {{
-              color: #f4f0e6;
+              color: #ffffff;
               font-family: "SF Mono", "Menlo", "JetBrains Mono", monospace;
               font-size: 11px;
-              font-weight: 600;
-              letter-spacing: 0.06em;
+              font-weight: 700;
+              letter-spacing: 0.08em;
+              text-transform: uppercase;
             }}
             """
         )
@@ -87,8 +86,8 @@ class Toast(QWidget):
         body_l.addWidget(stripe_w)
 
         inner = QHBoxLayout()
-        inner.setContentsMargins(16, 12, 18, 12)
-        inner.setSpacing(14)
+        inner.setContentsMargins(18, 14, 22, 14)
+        inner.setSpacing(16)
         lbl = QLabel(label)
         lbl.setObjectName("ToastLabel")
         inner.addWidget(lbl)
@@ -111,7 +110,7 @@ class Toast(QWidget):
         shadow = QGraphicsDropShadowEffect(body)
         shadow.setBlurRadius(28)
         shadow.setOffset(0, 6)
-        shadow.setColor(QColor(0, 0, 0, 90))
+        shadow.setColor(QColor(0, 0, 0, 130))
         body.setGraphicsEffect(shadow)
 
         self.adjustSize()

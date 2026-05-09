@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.0 — 2026-05-08
+
+Nothing-inspired full UI redesign.
+
+- **New design language**: pure black + pure white + Nothing red `#ff3636` accent. Sharp 2px corners (no rounded cards). Mono LED-feel typography across the app — Fraunces/Iowan Old Style replaced by SF Mono / Menlo at 800 weight for display impact.
+- **Industrial numbering** in nav and rows: `001 INDEX · 002 GENERAL · 003 PERMS · 004 WHISPER · 005 OLLAMA · 006 PROMPT · 007 LEDGER`. Two-letter status codes: `READY · REC · WRITE · ERROR`.
+- **Glyph-pixel VU meter**. Five-row by nine-column LED grid (Nothing's signature dot-matrix), peak rows light red.
+- **Display title**: `DICTATE / IN SILENCE.` set in 56px bold mono. Hotkey shown as huge mono `⌥R · ⇧L · F5` etc, with `◉ HOTKEY` and `◉ MODE` micro-labels.
+- **Permission status badges** as bordered LED chips: `● GRANTED` (green), `○ MISSING` (red), `— UNKNOWN` (grey).
+- **Floating overlay redesigned**: pure black pill, square LED dot, 5×9 pixel meter, monospace `REC / WRITE / READY` labels.
+- **Toast redesigned**: square corners, colored stripe, mono uppercase label + message.
+- **Buttons** stay sharp-corner inline-styled (immune to QSS cascade quirks). Primary = white-on-black at rest, red on hover. Default = transparent with `#2a2a2a` border, surface fill on hover.
+
 ## v0.1.10 — 2026-05-08
 
 Critical paste-target fix.
