@@ -1,20 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1a1614"/>
-      <stop offset="1" stop-color="#0d0b0a"/>
+      <stop offset="0" stop-color="#241d18"/>
+      <stop offset="1" stop-color="#0a0807"/>
     </linearGradient>
   </defs>
   <rect width="1024" height="1024" rx="232" ry="232" fill="url(#bg)"/>
-  <g transform="translate(512 596)">
+  <g transform="translate(512 660)">
     <text x="0" y="0" text-anchor="middle"
           font-family="Georgia"
           font-style="italic"
-          font-weight="500"
-          font-size="640"
-          fill="#f7f4ec"
-          letter-spacing="-32">v</text>
+          font-weight="700"
+          font-size="780"
+          fill="#f4f0e6"
+          letter-spacing="-44">v</text>
   </g>
-  <rect x="424" y="780" width="176" height="6" rx="3" ry="3" fill="#c2410c"/>
-  <circle cx="816" cy="208" r="20" fill="#c2410c" opacity="0.85"/>
+  <rect x="392" y="836" width="240" height="14" rx="7" ry="7" fill="#c2410c"/>
+  <circle cx="816" cy="208" r="32" fill="#c2410c"/>
 </svg>

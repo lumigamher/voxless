@@ -784,16 +784,85 @@ def _row(index: str, title: str, description: str | None, control: QWidget,
     return row
 
 
+_PRIMARY_BTN_QSS = """
+QPushButton {
+    background-color: #000000;
+    color: #ffffff;
+    border: 1px solid #000000;
+    border-radius: 4px;
+    padding: 11px 24px;
+    font-family: "SF Mono", "Menlo", "JetBrains Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.10em;
+}
+QPushButton:hover {
+    background-color: #c2410c;
+    color: #ffffff;
+    border-color: #9a3412;
+}
+QPushButton:pressed {
+    background-color: #9a3412;
+    color: #ffffff;
+    border-color: #9a3412;
+}
+QPushButton:disabled {
+    background-color: #3d3733;
+    color: rgba(255,255,255,0.5);
+    border-color: #3d3733;
+}
+"""
+
+_DEFAULT_BTN_QSS = """
+QPushButton {
+    background-color: #fbf8ef;
+    color: #1a1614;
+    border: 1px solid #d8cfbd;
+    border-radius: 4px;
+    padding: 11px 22px;
+    font-family: "SF Mono", "Menlo", "JetBrains Mono", "Cascadia Mono", "Consolas", monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+QPushButton:hover {
+    background-color: #ffffff;
+    color: #1a1614;
+    border-color: #1a1614;
+}
+QPushButton:pressed {
+    background-color: #d8cfbd;
+    color: #1a1614;
+}
+"""
+
+
+def primary_btn(label: str, on_click: Callable[[], None] | None = None) -> QPushButton:
+    btn = QPushButton(label.upper())
+    btn.setObjectName("Primary")
+    btn.setStyleSheet(_PRIMARY_BTN_QSS)
+    btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    if on_click:
+        btn.clicked.connect(on_click)
+    return btn
+
+
+def default_btn(label: str, on_click: Callable[[], None] | None = None) -> QPushButton:
+    btn = QPushButton(label.upper())
+    btn.setStyleSheet(_DEFAULT_BTN_QSS)
+    btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    if on_click:
+        btn.clicked.connect(on_click)
+    return btn
+
+
 def _save_bar(on_save: Callable[[], None]) -> QWidget:
     bar = QFrame()
     bar.setStyleSheet(f"background: transparent; border-top: 1px solid {RULE};")
     h = QHBoxLayout(bar)
     h.setContentsMargins(48, 18, 48, 24)
     h.addStretch(1)
-    btn = QPushButton("GUARDAR CAMBIOS")
-    btn.setObjectName("Primary")
-    btn.clicked.connect(on_save)
-    h.addWidget(btn)
+    h.addWidget(primary_btn("Guardar cambios", on_save))
     return bar
 
 
@@ -1136,10 +1205,10 @@ class PromptPage(QWidget):
         h = QHBoxLayout(bar)
         h.setContentsMargins(48, 18, 48, 24)
         h.addStretch(1)
-        btn = QPushButton("GUARDAR PROMPT")
-        btn.setObjectName("Primary")
-        btn.clicked.connect(lambda: self._on_save(self.editor.toPlainText()))
-        h.addWidget(btn)
+        h.addWidget(primary_btn(
+            "Guardar prompt",
+            lambda: self._on_save(self.editor.toPlainText())
+        ))
         outer.addWidget(bar)
 
 
@@ -1168,13 +1237,8 @@ class HistoryPage(QWidget):
 
         actions = QHBoxLayout()
         actions.addStretch(1)
-        copy_btn = QPushButton("COPIAR")
-        copy_btn.clicked.connect(self._copy_selected)
-        clear_btn = QPushButton("LIMPIAR")
-        clear_btn.setObjectName("Ghost")
-        clear_btn.clicked.connect(self.list.clear)
-        actions.addWidget(copy_btn)
-        actions.addWidget(clear_btn)
+        actions.addWidget(default_btn("Copiar", self._copy_selected))
+        actions.addWidget(default_btn("Limpiar", self.list.clear))
         bl.addLayout(actions)
 
         outer.addWidget(body, 1)
@@ -1255,9 +1319,7 @@ class PermissionsPage(QWidget):
         h = QHBoxLayout(bar)
         h.setContentsMargins(48, 14, 48, 24)
         h.addStretch(1)
-        refresh = QPushButton("VERIFICAR DE NUEVO")
-        refresh.clicked.connect(self.refresh)
-        h.addWidget(refresh)
+        h.addWidget(default_btn("Verificar de nuevo", self.refresh))
         outer.addWidget(bar)
 
     def _build_row(self, idx: str, perm: Permission) -> QWidget:
@@ -1267,13 +1329,11 @@ class PermissionsPage(QWidget):
 
         controls: list[QWidget] = [status]
         if perm.request is not None:
-            req_btn = QPushButton(perm.request_label.upper())
-            req_btn.setObjectName("Primary")
-            req_btn.clicked.connect(self._make_request_handler(perm))
-            controls.append(req_btn)
-        open_btn = QPushButton("ABRIR AJUSTES")
-        open_btn.clicked.connect(perm.open_settings)
-        controls.append(open_btn)
+            controls.append(primary_btn(
+                perm.request_label,
+                self._make_request_handler(perm),
+            ))
+        controls.append(default_btn("Abrir ajustes", perm.open_settings))
 
         spacer = QWidget()
         spacer.setFixedSize(0, 0)
@@ -1366,7 +1426,7 @@ class MainWindow(QMainWindow):
         self.nav.setCurrentRow(0)
         side.addWidget(self.nav, 1)
 
-        version_lbl = QLabel("v 0.1.7 · LOCAL")
+        version_lbl = QLabel("v 0.1.8 · LOCAL")
         version_lbl.setObjectName("VersionFooter")
         side.addWidget(version_lbl)
 

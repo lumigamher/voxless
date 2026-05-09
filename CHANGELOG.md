@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.8 — 2026-05-08
+
+- **Truly bulletproof "Guardar cambios"**. Inline stylesheets on every primary/default button (overrides app-level QSS, immune to cascade quirks). Pure black background + pure white text on the primary action — no more invisible labels.
+- **Bolder app icon**. Italic Georgia "v" rendered at 780 weight with thicker amber dash + corner dot. Recognizable down to 16×16 in the dock and taskbar.
+- **Helpers**: `primary_btn()` / `default_btn()` factories so future buttons inherit the right look without re-discovering Qt's button quirks.
+
 ## v0.1.7 — 2026-05-08
 
 - **Bulletproof button styles**. v0.1.6 used `background:` (shorthand) and a universal `* { color }` rule that Qt sometimes resolved against more-specific selectors, leaving Primary buttons with the wrong text color. Now every button state explicitly sets `background-color` AND `color` (resting / hover / pressed / disabled). Save buttons are clearly readable on both light and dark.
