@@ -218,12 +218,17 @@ class App:
 
             self.signals.transcribed.emit(text_raw, text_clean)
 
-            # Bring back whatever app the user was in BEFORE we trigger
-            # paste — protects against any momentary focus loss while the
-            # overlay or our windows were updating.
-            if self._frontmost is not None:
+            # Only restore the captured app if voxless is currently in the
+            # foreground — otherwise the user is already in their target
+            # app and we should leave focus exactly where it is (preserves
+            # cursor position inside whatever input they clicked).
+            if (
+                self._frontmost is not None
+                and frontmost.is_voxless_frontmost()
+            ):
+                log.info("voxless took focus — restoring previous app before paste")
                 frontmost.restore(self._frontmost)
-                time.sleep(0.08)
+                time.sleep(0.15)
             self._paster.paste(text_clean)
             self._frontmost = None
             self._set_state("idle")

@@ -39,6 +39,35 @@ def get_frontmost() -> Any:
     return None
 
 
+def is_voxless_frontmost() -> bool:
+    """True if voxless itself currently owns the focused app — meaning we
+    almost certainly stole focus and need to put it back before pasting."""
+    if sys.platform == "darwin":
+        try:
+            from AppKit import NSWorkspace  # type: ignore
+            front = NSWorkspace.sharedWorkspace().frontmostApplication()
+            if front is None:
+                return False
+            bundle = front.bundleIdentifier() or ""
+            return bundle == "co.lumigamher.voxless" or bundle.endswith(".voxless")
+        except Exception:
+            return False
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetForegroundWindow()
+            if hwnd == 0:
+                return False
+            length = user32.GetWindowTextLengthW(hwnd) + 1
+            buf = ctypes.create_unicode_buffer(length)
+            user32.GetWindowTextW(hwnd, buf, length)
+            return "voxless" in buf.value.lower()
+        except Exception:
+            return False
+    return False
+
+
 def restore(handle: Any) -> bool:
     """Bring the given handle's app/window back to the foreground. Returns
     True if the call dispatched cleanly."""

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.1 — 2026-05-08
+
+- **Paste lands at the cursor**, not at the end of a wrong window. v0.1.10 always restored the captured frontmost app before pasting, which on macOS sometimes activated a different window of that app and dropped the cursor at the wrong place. v0.2.1 only restores when voxless itself is currently the foreground app — otherwise it leaves focus exactly where the user left it (cursor inside the input they clicked into).
+- Increased restore-then-paste delay to 150 ms so macOS / Windows have time to settle the activation before Cmd+V / Ctrl+V fires.
+- New `frontmost.is_voxless_frontmost()` helper used to gate the restore.
+
 ## v0.2.0 — 2026-05-08
 
 Nothing-inspired full UI redesign.
