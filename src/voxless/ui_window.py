@@ -93,9 +93,9 @@ def _is_dark_mode() -> bool:
 
 def QSS_LIGHT() -> str:
     return f"""
-* {{ font-family: {_sans()}; color: {INK}; }}
+QWidget {{ font-family: {_sans()}; color: {INK}; background: transparent; }}
 
-QMainWindow, #Root {{ background: {PAPER}; }}
+QMainWindow, #Root {{ background-color: {PAPER}; }}
 
 /* ── sidebar ───────────────────────────────────────────────────────── */
 #Sidebar {{
@@ -232,54 +232,76 @@ QComboBox::down-arrow {{
   width: 8px; height: 8px;
 }}
 
-/* ── buttons ───────────────────────────────────────────────────────── */
+/* ── buttons (background-color + color set on every state to be
+   bulletproof against Fusion gradients and selector cascade quirks) ── */
 QPushButton {{
-  background: {PAPER_HI};
+  background-color: {PAPER_HI};
+  color: {INK};
   border: 1px solid {RULE};
   border-radius: 4px;
-  padding: 9px 16px;
-  color: {INK};
+  padding: 10px 18px;
   font-family: {_mono()};
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.10em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }}
 QPushButton:hover {{
-  background: white;
+  background-color: #ffffff;
+  color: {INK};
   border-color: {INK_SOFT};
 }}
-QPushButton:pressed {{ background: {RULE}; }}
+QPushButton:pressed {{
+  background-color: {RULE};
+  color: {INK};
+}}
 QPushButton:disabled {{
+  background-color: {PAPER_HI};
   color: {INK_MUTE};
-  background: {PAPER_HI};
   border-color: {RULE};
 }}
 
 QPushButton#Primary {{
-  background: {INK};
+  background-color: {INK};
   color: {PAPER};
   border: 1px solid {INK};
+  padding: 10px 22px;
 }}
 QPushButton#Primary:hover {{
-  background: {ACCENT};
+  background-color: {ACCENT};
+  color: #ffffff;
   border-color: {ACCENT_HOT};
 }}
-QPushButton#Primary:pressed {{ background: {ACCENT_HOT}; }}
+QPushButton#Primary:pressed {{
+  background-color: {ACCENT_HOT};
+  color: #ffffff;
+  border-color: {ACCENT_HOT};
+}}
+QPushButton#Primary:disabled {{
+  background-color: {INK_SOFT};
+  color: {INK_MUTE};
+  border-color: {INK_SOFT};
+}}
 
 QPushButton#Accent {{
-  background: {ACCENT};
-  color: white;
+  background-color: {ACCENT};
+  color: #ffffff;
   border: 1px solid {ACCENT_HOT};
 }}
-QPushButton#Accent:hover {{ background: {ACCENT_HOT}; }}
+QPushButton#Accent:hover {{
+  background-color: {ACCENT_HOT};
+  color: #ffffff;
+}}
 
 QPushButton#Ghost {{
-  background: transparent;
+  background-color: transparent;
+  color: {ACCENT};
   border: 1px solid transparent;
+}}
+QPushButton#Ghost:hover {{
+  background-color: {ACCENT_TINT};
   color: {ACCENT};
 }}
-QPushButton#Ghost:hover {{ background: {ACCENT_TINT}; }}
 
 /* ── checkboxes ────────────────────────────────────────────────────── */
 QCheckBox {{ color: {INK}; font-family: {_mono()}; font-size: 11px; spacing: 10px; }}
@@ -1344,7 +1366,7 @@ class MainWindow(QMainWindow):
         self.nav.setCurrentRow(0)
         side.addWidget(self.nav, 1)
 
-        version_lbl = QLabel("v 0.1.6 · LOCAL")
+        version_lbl = QLabel("v 0.1.7 · LOCAL")
         version_lbl.setObjectName("VersionFooter")
         side.addWidget(version_lbl)
 

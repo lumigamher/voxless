@@ -124,7 +124,24 @@ def _open_win(uri: str) -> Callable[[], None]:
 
 
 def _windows_microphone() -> Status:
-    return "unknown"  # Win 10+ rarely blocks at runtime; visual cue only
+    """Probe by trying to open a 100ms input stream — if Windows privacy is
+    blocking, sounddevice raises OSError immediately."""
+    try:
+        import numpy as np  # noqa: F401
+        import sounddevice as sd
+        with sd.InputStream(samplerate=16000, channels=1, dtype="float32",
+                             blocksize=1024) as stream:
+            stream.read(256)
+        return "granted"
+    except Exception:
+        log.debug("Windows microphone probe failed", exc_info=True)
+        return "denied"
+
+
+def _windows_hotkey() -> Status:
+    """No reliable detection on Windows — return unknown so we still surface
+    the row with help text + 'Open Settings' link."""
+    return "unknown"
 
 
 def list_permissions() -> list[Permission]:
@@ -161,9 +178,23 @@ def list_permissions() -> list[Permission]:
             Permission(
                 key="microphone",
                 title="Micrófono",
-                description="Permite a voxless usar tu micrófono para dictado.",
+                description=(
+                    "Settings → Privacy & security → Microphone. "
+                    "Activa «Microphone access» y «Let desktop apps access your microphone»."
+                ),
                 detect=_windows_microphone,
                 open_settings=_open_win("ms-settings:privacy-microphone"),
+            ),
+            Permission(
+                key="hotkey",
+                title="Hotkey global",
+                description=(
+                    "Si la tecla no responde fuera de voxless, ejecuta como Administrador "
+                    "(click derecho sobre voxless.exe → Run as administrator). Algunos "
+                    "antivirus también bloquean los hooks de teclado."
+                ),
+                detect=_windows_hotkey,
+                open_settings=_open_win("ms-settings:windowsdefender"),
             ),
         ]
     return []

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.7 — 2026-05-08
+
+- **Bulletproof button styles**. v0.1.6 used `background:` (shorthand) and a universal `* { color }` rule that Qt sometimes resolved against more-specific selectors, leaving Primary buttons with the wrong text color. Now every button state explicitly sets `background-color` AND `color` (resting / hover / pressed / disabled). Save buttons are clearly readable on both light and dark.
+- **Permisos page on Windows**. Added a real microphone-access probe (opens a 100 ms input stream — if Windows privacy is blocking it raises immediately) and a Hotkey row that links to Windows Defender settings + suggests "Run as administrator" for the case where AV blocks keyboard hooks.
+- **Better description copy** for Windows microphone (mentions both privacy toggles users need to flip).
+- Version footer in sidebar bumped.
+
 ## v0.1.6 — 2026-05-08
 
 Studio Print Shop redesign.
