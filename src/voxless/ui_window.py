@@ -14,6 +14,7 @@ from datetime import datetime
 
 import numpy as np
 from PySide6.QtCore import (
+    QEvent,
     QRect,
     QSize,
     Qt,
@@ -803,7 +804,7 @@ class HomePage(QWidget):
         self.eyebrow.setObjectName("HeroEyebrow")
         eye_row.addWidget(self.eyebrow, 0, Qt.AlignmentFlag.AlignVCenter)
         eye_row.addStretch(1)
-        meta = QLabel("ver 0.3.0")
+        meta = QLabel("ver 0.3.1")
         meta.setObjectName("HeroMetric")
         eye_row.addWidget(meta, 0, Qt.AlignmentFlag.AlignVCenter)
         wrap.addLayout(eye_row)
@@ -1405,7 +1406,7 @@ class MainWindow(QMainWindow):
         self.nav.setCurrentRow(0)
         side.addWidget(self.nav, 1)
 
-        version_lbl = QLabel(f"v 0.3.0 · {t('side.versionsuffix')}")
+        version_lbl = QLabel(f"v 0.3.1 · {t('side.versionsuffix')}")
         version_lbl.setObjectName("VersionFooter")
         side.addWidget(version_lbl)
 
@@ -1503,12 +1504,23 @@ class MainWindow(QMainWindow):
         super().raise_()
         super().activateWindow()
 
+    def event(self, e) -> bool:
+        """Lowest-level guard: intercept Show / WindowActivate events. Any
+        unauthorized show — including those routed through C++ via Qt's
+        applicationShouldHandleReopen handler — gets dropped on the floor."""
+        if not self._show_authorized:
+            t = e.type()
+            if t in (
+                QEvent.Type.Show,
+                QEvent.Type.ShowToParent,
+                QEvent.Type.WindowActivate,
+            ):
+                log.warning("MainWindow event %s blocked (not authorized)", t)
+                QTimer.singleShot(0, super().hide)
+                return True
+        return super().event(e)
+
     def showEvent(self, event) -> None:
-        """Final, system-level guard: this fires for EVERY visibility
-        transition — including those triggered by Qt's reopen handler
-        and AppKit's `applicationShouldHandleReopen:` — even when the
-        Python show() override is bypassed via the native C++ code path.
-        If we weren't authorized, hide on the next event-loop tick."""
         if not self._show_authorized:
             log.warning("MainWindow.showEvent fired without authorization — hiding")
             QTimer.singleShot(0, super().hide)

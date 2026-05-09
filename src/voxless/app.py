@@ -62,6 +62,7 @@ class App:
 
         self._stop = threading.Event()
         self._worker = threading.Thread(target=self._run_worker, daemon=True, name="voxless-worker")
+        self._watchdog = threading.Thread(target=self._run_watchdog, daemon=True, name="voxless-watchdog")
 
     @property
     def recorder(self) -> Recorder:
@@ -70,6 +71,7 @@ class App:
     def start_background(self) -> None:
         self._hotkey.start()
         self._worker.start()
+        self._watchdog.start()
         log.info("voxless backend ready — hotkey: %s", self._cfg.hotkey)
 
     def shutdown(self) -> None:
@@ -142,6 +144,20 @@ class App:
             return
         self._state = state
         self.signals.state_changed.emit(state)
+
+    def _run_watchdog(self) -> None:
+        """Background watchdog: if state is stuck in recording or
+        processing for > 20s the system is wedged (missed release event,
+        AppKit deadlock, etc). Force a synthetic release / reset."""
+        while not self._stop.wait(2.0):
+            if self._state == "recording" and self._record_started_at is not None:
+                age = time.monotonic() - self._record_started_at
+                if age > 20.0:
+                    log.warning("watchdog: stuck recording for %.1fs — forcing release", age)
+                    try:
+                        self._events.put("release")
+                    except Exception:
+                        pass
 
     def _run_worker(self) -> None:
         while not self._stop.is_set():

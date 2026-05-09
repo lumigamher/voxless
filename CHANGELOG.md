@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.1 — 2026-05-09
+
+- **Lowest-level event guard on the main window**. Override `event()` so we intercept *every* Qt event — including `QEvent.Show`, `QEvent.ShowToParent`, and `QEvent.WindowActivate`. Any unauthorized show is dropped and the window is hidden on the next event-loop tick. Catches paths that bypass `showEvent` via the native C++ side (Qt's reopen handler, etc).
+- **Recording-stuck watchdog**. New background thread on the App that polls every 2 s. If `state == "recording"` for more than 20 seconds (suggests pynput dropped a release event or the worker is wedged), it injects a synthetic release event so the state machine recovers. No more permanent stuck-in-REC.
+
 ## v0.3.0 — 2026-05-09
 
 - **System-level guard against the main window auto-opening**. The Python `show()` override in v0.2.9 wasn't enough — Qt's response to AppKit's `applicationShouldHandleReopen:` and other native paths bypasses the Python override and goes straight to C++. v0.3.0 also overrides `showEvent`, which fires for EVERY visibility transition regardless of how it's triggered. If we weren't authorized via `show_authorized()`, we schedule an immediate `hide()` on the next event-loop tick. The window cannot become visible without the explicit auth flag, period. This unblocks paste — voxless never grabs focus, so Cmd+V always lands in the target input.
