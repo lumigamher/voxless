@@ -74,7 +74,7 @@ def main() -> int:
     set_lang(cfg.ui_language)
 
     log.info(
-        "Starting voxless 0.2.7 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.2.8 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",
@@ -86,19 +86,6 @@ def main() -> int:
     qt_app.setApplicationDisplayName("voxless")
     qt_app.setOrganizationName("voxless")
     qt_app.setQuitOnLastWindowClosed(False)
-
-    # Demote voxless to an accessory app so its windows / overlay
-    # NEVER auto-activate the app and never appear in cmd-tab. The
-    # tray icon stays. The main window is reachable from the tray.
-    # This is the same trick Linear / Raycast / Slack use for their
-    # menu-bar UIs.
-    if sys.platform == "darwin":
-        try:
-            from AppKit import NSApp, NSApplicationActivationPolicyAccessory
-            NSApp.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
-            log.info("Set NSApp activation policy to Accessory (no dock icon).")
-        except Exception:
-            log.exception("Could not switch to accessory activation policy")
 
     if _try_send_show_to_existing():
         log.info("Another voxless instance is running — bringing it to front and exiting.")

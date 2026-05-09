@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.8 — 2026-05-09
+
+- **Dock icon back**. Reverted v0.2.6's accessory-app switch (`LSUIElement: True` / `setActivationPolicy(.accessory)`) — voxless now shows in the Dock and Cmd-Tab again. The hotkey listener was also flaky in accessory mode for some users; reverting fixes both.
+- The `force-hide on idle` defense from v0.2.5 stays in place, so the main window still shouldn't auto-open during recording.
+
 ## v0.2.7 — 2026-05-09
 
 - **Cleaner feedback sounds**. Replaced the gluey "bubble plop" with crisp percussive clicks: pure sine + a hint of 2nd harmonic, tight attack-decay envelope. Start at 720 Hz (60 ms), stop at 540 Hz (70 ms) — feels like a real on/off, not a kid's app.
