@@ -21,6 +21,42 @@ from .ui_window import MainWindow
 SINGLE_INSTANCE_KEY = "voxless-single-instance-v1"
 
 
+_REOPEN_HANDLER = None  # keep a Python reference so it isn't GC'd
+
+
+def _install_reopen_blocker(log) -> None:
+    """Block macOS' kAEReopenApplication AppleEvent. Without this, AppKit
+    auto-shows our main window when the dock icon is clicked or when the
+    OS decides to reopen us (which fires for various reasons we can't
+    control from inside Qt). This intercept runs BEFORE Qt sees it."""
+    global _REOPEN_HANDLER
+    def _fcc(s: bytes) -> int:
+        # Convert a 4-char ASCII code (e.g. b'aevt') into an OSType int.
+        return (s[0] << 24) | (s[1] << 16) | (s[2] << 8) | s[3]
+
+    try:
+        from Foundation import NSAppleEventManager, NSObject  # type: ignore
+
+        class _ReopenHandler(NSObject):
+            def handleReopen_withReplyEvent_(self, event, reply):  # noqa: N802
+                log.debug("AppleEvent kAEReopenApplication blocked")
+                return None
+
+        handler = _ReopenHandler.alloc().init()
+        manager = NSAppleEventManager.sharedAppleEventManager()
+        # kCoreEventClass / kAEReopenApplication
+        manager.setEventHandler_andSelector_forEventClass_andEventID_(
+            handler,
+            'handleReopen:withReplyEvent:',
+            _fcc(b'aevt'),
+            _fcc(b'rapp'),
+        )
+        _REOPEN_HANDLER = handler
+        log.info("Installed AppleEvent reopen blocker")
+    except Exception:
+        log.exception("Could not install reopen blocker")
+
+
 def _try_send_show_to_existing() -> bool:
     """If another voxless instance is running, ping it to show the window
     and return True so we can exit. Otherwise return False."""
@@ -74,7 +110,7 @@ def main() -> int:
     set_lang(cfg.ui_language)
 
     log.info(
-        "Starting voxless 0.3.2 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.3.3 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",
@@ -86,6 +122,13 @@ def main() -> int:
     qt_app.setApplicationDisplayName("voxless")
     qt_app.setOrganizationName("voxless")
     qt_app.setQuitOnLastWindowClosed(False)
+
+    # Block macOS' "reopen application" AppleEvent (kAEReopenApplication)
+    # at the AppleEvent layer — this is what fires when the dock icon is
+    # clicked / when AppKit decides to auto-show a hidden window. Qt
+    # normally handles it by showing the main window. We don't want that.
+    if sys.platform == "darwin":
+        _install_reopen_blocker(log)
 
     if _try_send_show_to_existing():
         log.info("Another voxless instance is running — bringing it to front and exiting.")

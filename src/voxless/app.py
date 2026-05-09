@@ -150,10 +150,10 @@ class App:
         than ~90s the system is probably wedged (pynput missed a release,
         AppKit deadlock, the user walked away mid-dictation, etc). Force
         a synthetic release so the state machine recovers."""
-        while not self._stop.wait(5.0):
+        while not self._stop.wait(2.0):
             if self._state == "recording" and self._record_started_at is not None:
                 age = time.monotonic() - self._record_started_at
-                if age > 90.0:
+                if age > 30.0:
                     log.warning("watchdog: stuck recording for %.1fs — forcing release", age)
                     try:
                         self._events.put("release")
@@ -194,21 +194,26 @@ class App:
                 return
 
         if event == "press":
-            if self._state != "idle":
+            # Pressing the hotkey AGAIN while already recording means the
+            # OS dropped a release event (or the user wants to forcibly
+            # end this dictation). Treat it as a release — definitive stop.
+            if self._state == "recording":
+                log.warning("press while recording — forcing release")
+                event = "release"  # fall through
+            elif self._state != "idle":
                 log.debug("press ignored — state=%s", self._state)
                 return
-            # Capture the app the user is currently in so we can dispatch
-            # paste straight at it later. None means voxless itself or
-            # nothing to capture — we'll fall back to a generic Cmd+V.
-            self._target_app = frontmost.get_frontmost()
-            if self._target_app:
-                log.info("captured target app: %s", self._target_app)
-            self._recorder.start()
-            self._record_started_at = time.monotonic()
-            self._set_state("recording")
-            if self._cfg.sound_feedback:
-                sounds.play_start()
-            return
+            else:
+                # Normal press path.
+                self._target_app = frontmost.get_frontmost()
+                if self._target_app:
+                    log.info("captured target app: %s", self._target_app)
+                self._recorder.start()
+                self._record_started_at = time.monotonic()
+                self._set_state("recording")
+                if self._cfg.sound_feedback:
+                    sounds.play_start()
+                return
 
         if event == "release":
             if self._state != "recording":

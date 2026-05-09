@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.3 — 2026-05-09
+
+- **Hotkey-press-while-recording = forced release**. If you press the hotkey again while a recording is already in flight, voxless treats the second press as a definitive release. Fixes the rare case where pynput drops a release event and recording would otherwise hang. Press again = stop now.
+- **Watchdog 90 s → 30 s**. Faster recovery from genuinely wedged sessions.
+- **AppleEvent reopen blocker on macOS**. We now intercept the `kAEReopenApplication` Apple Event before AppKit / Qt see it, so the OS can never auto-show our main window via that path (dock-click or any internal reopen trigger). Combined with the showEvent + event() guards from v0.3.1, the main window can ONLY appear via an explicit tray-click `show_authorized()` call.
+
 ## v0.3.2 — 2026-05-09
 
 - **Watchdog threshold raised from 20 s → 90 s**. The user is dictating, not training Morse — long pauses + long sentences are normal and shouldn't trigger a forced release. 90 s still catches genuinely wedged sessions while letting natural speech run free.
