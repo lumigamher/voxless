@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication
 
 from .app import App
 from .config import ensure_user_files, load_config
+from .i18n import set_lang
 from .logging_setup import setup_logging
 from .overlay import RecorderOverlay
 from .tray import Tray
@@ -70,8 +71,10 @@ def main() -> int:
         log.exception("Failed to load configuration: %s", exc)
         return 1
 
+    set_lang(cfg.ui_language)
+
     log.info(
-        "Starting voxless 0.2.1 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.2.2 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",

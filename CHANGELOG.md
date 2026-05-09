@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.2 — 2026-05-08
+
+- **Spanish / English UI**. New `i18n` module with the full string catalog. New row in **General** to switch language; saved to config (`ui_language`). The whole app — sidebar, page headers, settings rows, button labels, status text, toasts, permission badges, hero copy — flips on save (next launch is fully bilingual; the current session updates everything reachable from the toast).
+- **Stronger paste-target guard**. `frontmost.get_frontmost()` now actively rejects voxless's own pid/bundle, so we can never accidentally capture-then-restore *ourselves* (which had been re-opening the main window after transcription). Combined with v0.2.1's "only restore if voxless is frontmost" gate, paste reliably lands at the cursor position the user clicked.
+
 ## v0.2.1 — 2026-05-08
 
 - **Paste lands at the cursor**, not at the end of a wrong window. v0.1.10 always restored the captured frontmost app before pasting, which on macOS sometimes activated a different window of that app and dropped the cursor at the wrong place. v0.2.1 only restores when voxless itself is currently the foreground app — otherwise it leaves focus exactly where the user left it (cursor inside the input they clicked into).

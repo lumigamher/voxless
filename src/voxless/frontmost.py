@@ -12,9 +12,17 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
+def _own_pid() -> int:
+    import os
+    return os.getpid()
+
+
 def get_frontmost() -> Any:
     """Return an opaque platform-specific handle representing the currently
-    frontmost app. Returns None if unavailable."""
+    frontmost app, or None if unavailable / if voxless itself is frontmost.
+
+    We deliberately never capture our own pid — restoring "voxless to the
+    front" later would re-open our main window and steal the cursor."""
     if sys.platform == "darwin":
         try:
             from AppKit import NSWorkspace  # type: ignore
@@ -22,15 +30,27 @@ def get_frontmost() -> Any:
             app = ws.frontmostApplication()
             if app is None:
                 return None
-            return ("macos", int(app.processIdentifier()))
+            pid = int(app.processIdentifier())
+            if pid == _own_pid():
+                return None
+            bundle = (app.bundleIdentifier() or "").lower()
+            if "voxless" in bundle:
+                return None
+            return ("macos", pid)
         except Exception:
             log.debug("frontmost: NSWorkspace probe failed", exc_info=True)
             return None
     if sys.platform.startswith("win"):
         try:
             import ctypes
-            hwnd = ctypes.windll.user32.GetForegroundWindow()
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetForegroundWindow()
             if hwnd == 0:
+                return None
+            length = user32.GetWindowTextLengthW(hwnd) + 1
+            buf = ctypes.create_unicode_buffer(length)
+            user32.GetWindowTextW(hwnd, buf, length)
+            if "voxless" in (buf.value or "").lower():
                 return None
             return ("win", int(hwnd))
         except Exception:

@@ -33,6 +33,7 @@ hotkey_mode = "hold"
 min_record_ms = 250
 sound_feedback = false
 show_overlay = true
+ui_language = "es"
 
 [whisper]
 model = "small"
@@ -76,6 +77,7 @@ class PasteConfig(BaseModel):
 
 
 HotkeyMode = Literal["hold", "toggle"]
+UiLanguage = Literal["es", "en"]
 
 
 class Config(BaseModel):
@@ -84,6 +86,7 @@ class Config(BaseModel):
     min_record_ms: int = Field(250, ge=0)
     sound_feedback: bool = False
     show_overlay: bool = True
+    ui_language: UiLanguage = "es"
     whisper: WhisperConfig = Field(default_factory=WhisperConfig)
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     paste: PasteConfig = Field(default_factory=PasteConfig)
@@ -134,6 +137,7 @@ def save_config(cfg: Config, path: Path | None = None) -> None:
         f"min_record_ms = {cfg.min_record_ms}",
         f"sound_feedback = {_toml_value(cfg.sound_feedback)}",
         f"show_overlay = {_toml_value(cfg.show_overlay)}",
+        f"ui_language = {_toml_value(cfg.ui_language)}",
         "",
         "[whisper]",
         f"model = {_toml_value(cfg.whisper.model)}",

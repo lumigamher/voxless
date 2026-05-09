@@ -54,6 +54,7 @@ from PySide6.QtWidgets import (
 
 from . import ai_actions
 from .config import Config, save_config, save_prompt
+from .i18n import t, set_lang
 from .permissions import Permission, list_permissions
 from .prompts import load_prompt
 from .toast import Toast
@@ -437,15 +438,16 @@ QLabel#LastText {{
 
 # ─── data ────────────────────────────────────────────────────────────────
 
-NAV_ITEMS = [
-    ("home",        "INDEX"),
-    ("general",     "GENERAL"),
-    ("permissions", "PERMS"),
-    ("whisper",     "WHISPER"),
-    ("ollama",      "OLLAMA"),
-    ("prompt",      "PROMPT"),
-    ("history",     "LEDGER"),
-]
+def NAV_ITEMS() -> list[tuple[str, str]]:
+    return [
+        ("home",        t("nav.home")),
+        ("general",     t("nav.general")),
+        ("permissions", t("nav.permissions")),
+        ("whisper",     t("nav.whisper")),
+        ("ollama",      t("nav.ollama")),
+        ("prompt",      t("nav.prompt")),
+        ("history",     t("nav.history")),
+    ]
 
 STATE_TEXT = {
     "idle":       "READY",
@@ -797,27 +799,22 @@ class HomePage(QWidget):
         eye_row.setSpacing(10)
         self.dot = StatusDot(size=12)
         eye_row.addWidget(self.dot, 0, Qt.AlignmentFlag.AlignVCenter)
-        self.eyebrow = QLabel("READY · IDLE")
+        self.eyebrow = QLabel(t("hero.ready_idle"))
         self.eyebrow.setObjectName("HeroEyebrow")
         eye_row.addWidget(self.eyebrow, 0, Qt.AlignmentFlag.AlignVCenter)
         eye_row.addStretch(1)
-        meta = QLabel("ver 0.2.0")
+        meta = QLabel("ver 0.2.2")
         meta.setObjectName("HeroMetric")
         eye_row.addWidget(meta, 0, Qt.AlignmentFlag.AlignVCenter)
         wrap.addLayout(eye_row)
 
         # display title
-        title = QLabel("DICTATE\nIN SILENCE.")
+        title = QLabel(t("hero.title"))
         title.setObjectName("HeroTitle")
         title.setTextFormat(Qt.TextFormat.PlainText)
         wrap.addWidget(title)
 
-        lead = QLabel(
-            "Hold your hotkey · speak · release. "
-            "voxless transcribes locally with Whisper, polishes with Ollama, "
-            "and types into the focused app. "
-            "Private. Fast. Offline."
-        )
+        lead = QLabel(t("hero.lead"))
         lead.setObjectName("HeroLead")
         lead.setWordWrap(True)
         wrap.addWidget(lead)
@@ -830,7 +827,7 @@ class HomePage(QWidget):
         hk_l.setSpacing(28)
         meta_col = QVBoxLayout()
         meta_col.setSpacing(4)
-        meta_lbl = QLabel("◉ HOTKEY")
+        meta_lbl = QLabel(t("hero.hotkey"))
         meta_lbl.setObjectName("HeroHotkeyLabel")
         meta_col.addWidget(meta_lbl)
         self.hotkey_value = QLabel(_spec_pretty(cfg.hotkey))
@@ -841,11 +838,11 @@ class HomePage(QWidget):
         # mode marker
         mode_col = QVBoxLayout()
         mode_col.setSpacing(4)
-        mode_label = QLabel("◉ MODE")
+        mode_label = QLabel(t("hero.mode"))
         mode_label.setObjectName("HeroHotkeyLabel")
         mode_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         mode_col.addWidget(mode_label)
-        self.mode_value = QLabel("PUSH-TO-TALK" if cfg.hotkey_mode == "hold" else "TAP-TOGGLE")
+        self.mode_value = QLabel(t("hero.mode.hold") if cfg.hotkey_mode == "hold" else t("hero.mode.toggle"))
         self.mode_value.setStyleSheet(
             f"font-family:{_mono()}; font-size:14px; color:{INK}; "
             f"letter-spacing:0.18em; font-weight:800; text-transform:uppercase;"
@@ -857,7 +854,7 @@ class HomePage(QWidget):
 
         # vu meter row
         meter_row = QHBoxLayout()
-        m1 = QLabel("◉ LEVEL")
+        m1 = QLabel(t("hero.level"))
         m1.setObjectName("HeroMetric")
         meter_row.addWidget(m1)
         meter_row.addStretch(1)
@@ -875,10 +872,10 @@ class HomePage(QWidget):
         ll = QVBoxLayout(last)
         ll.setContentsMargins(24, 20, 24, 22)
         ll.setSpacing(10)
-        le = QLabel("◉ LAST · WAITING")
+        le = QLabel(t("hero.last.waiting"))
         le.setObjectName("LastEyebrow")
         ll.addWidget(le)
-        self.last_text = QLabel("— No transcriptions yet. Hold your hotkey to begin.")
+        self.last_text = QLabel(t("hero.last.empty"))
         self.last_text.setObjectName("LastText")
         self.last_text.setWordWrap(True)
         ll.addWidget(self.last_text)
@@ -888,26 +885,25 @@ class HomePage(QWidget):
         wrap.addStretch(1)
 
     def set_state(self, state: str) -> None:
-        text = STATE_TEXT.get(state, STATE_TEXT["idle"])
         if state == "idle":
-            self.eyebrow.setText("READY · IDLE")
+            self.eyebrow.setText(t("hero.ready_idle"))
         elif state == "recording":
-            self.eyebrow.setText(f"{text} · LIVE")
+            self.eyebrow.setText(t("hero.rec_live"))
         elif state == "processing":
-            self.eyebrow.setText(f"{text} · WHISPER → OLLAMA")
+            self.eyebrow.setText(t("hero.processing"))
         else:
-            self.eyebrow.setText(text)
+            self.eyebrow.setText(STATE_TEXT.get(state, "ERROR"))
         self.dot.set_state(state)
         self.vu.set_active(state == "recording")
 
     def set_hotkey(self, spec: str, mode: str = "hold") -> None:
         self.hotkey_value.setText(_spec_pretty(spec))
-        self.mode_value.setText("PUSH-TO-TALK" if mode == "hold" else "TAP-TOGGLE")
+        self.mode_value.setText(t("hero.mode.hold") if mode == "hold" else t("hero.mode.toggle"))
 
-    def push_history_preview(self, text: str) -> None:
+    def push_history_preview(self, text_str: str) -> None:
         ts = datetime.now().strftime("%H:%M")
-        self._last_eyebrow.setText(f"◉ LAST · {ts}")
-        self.last_text.setText(text)
+        self._last_eyebrow.setText(t("hero.last.template", time=ts))
+        self.last_text.setText(text_str)
 
 
 class GeneralPage(QWidget):
@@ -920,9 +916,9 @@ class GeneralPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(_page_header(
-            "001 · CONTROL",
-            "GENERAL",
-            "Hotkey, activation mode and recording behaviour.",
+            t("page.general.eyebrow"),
+            t("page.general.title"),
+            t("page.general.sub"),
         ))
 
         body = QFrame()
@@ -931,17 +927,17 @@ class GeneralPage(QWidget):
         bl.setSpacing(0)
 
         self.hotkey_recorder = HotkeyRecorder(cfg.hotkey)
-        bl.addWidget(_row("01", "HOTKEY",
-                          "Click and press the key — or combination — you want to use.",
+        bl.addWidget(_row("01", t("general.hotkey.title"),
+                          t("general.hotkey.desc"),
                           self.hotkey_recorder))
 
         self.mode_combo = QComboBox()
-        self.mode_combo.addItem("Hold · push-to-talk", "hold")
-        self.mode_combo.addItem("Tap to start · tap to stop", "toggle")
+        self.mode_combo.addItem(t("general.activation.hold"), "hold")
+        self.mode_combo.addItem(t("general.activation.toggle"), "toggle")
         idx = self.mode_combo.findData(cfg.hotkey_mode)
         if idx >= 0: self.mode_combo.setCurrentIndex(idx)
-        bl.addWidget(_row("02", "ACTIVATION",
-                          "How the hotkey controls the recording.",
+        bl.addWidget(_row("02", t("general.activation.title"),
+                          t("general.activation.desc"),
                           self.mode_combo))
 
         self.min_ms = QSpinBox()
@@ -949,21 +945,30 @@ class GeneralPage(QWidget):
         self.min_ms.setSingleStep(50)
         self.min_ms.setSuffix(" MS")
         self.min_ms.setValue(cfg.min_record_ms)
-        bl.addWidget(_row("03", "MIN DURATION",
-                          "Recordings shorter than this are ignored.",
+        bl.addWidget(_row("03", t("general.minduration.title"),
+                          t("general.minduration.desc"),
                           self.min_ms))
 
-        self.sound = QCheckBox("ENABLED")
+        self.sound = QCheckBox(t("general.checkbox.enabled"))
         self.sound.setChecked(cfg.sound_feedback)
-        bl.addWidget(_row("04", "SOUND",
-                          "Subtle bubble click on start and stop.",
+        bl.addWidget(_row("04", t("general.sound.title"),
+                          t("general.sound.desc"),
                           self.sound))
 
-        self.overlay_chk = QCheckBox("ENABLED")
+        self.overlay_chk = QCheckBox(t("general.checkbox.enabled"))
         self.overlay_chk.setChecked(cfg.show_overlay)
-        bl.addWidget(_row("05", "OVERLAY",
-                          "Floating glyph indicator at the bottom of the screen.",
+        bl.addWidget(_row("05", t("general.overlay.title"),
+                          t("general.overlay.desc"),
                           self.overlay_chk))
+
+        self.lang_combo = QComboBox()
+        self.lang_combo.addItem(t("general.lang.es"), "es")
+        self.lang_combo.addItem(t("general.lang.en"), "en")
+        idx = self.lang_combo.findData(cfg.ui_language)
+        if idx >= 0: self.lang_combo.setCurrentIndex(idx)
+        bl.addWidget(_row("06", t("general.lang.title"),
+                          t("general.lang.desc"),
+                          self.lang_combo))
 
         outer.addWidget(_scrollable(body), 1)
         outer.addWidget(_save_bar(self._save))
@@ -974,6 +979,7 @@ class GeneralPage(QWidget):
         self._cfg.min_record_ms = int(self.min_ms.value())
         self._cfg.sound_feedback = self.sound.isChecked()
         self._cfg.show_overlay = self.overlay_chk.isChecked()
+        self._cfg.ui_language = self.lang_combo.currentData()
         self._on_save(self._cfg)
 
 
@@ -987,9 +993,9 @@ class WhisperPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(_page_header(
-            "003 · TRANSCRIPTION",
-            "WHISPER",
-            "Local speech-to-text via faster-whisper / CTranslate2.",
+            t("page.whisper.eyebrow"),
+            t("page.whisper.title"),
+            t("page.whisper.sub"),
         ))
 
         body = QFrame()
@@ -1000,28 +1006,28 @@ class WhisperPage(QWidget):
         self.model_combo = QComboBox()
         self.model_combo.addItems(["tiny", "base", "small", "medium", "large-v3"])
         self.model_combo.setCurrentText(cfg.whisper.model)
-        bl.addWidget(_row("01", "MODEL",
-                          "Larger = more accurate, slower. small is the sweet spot.",
+        bl.addWidget(_row("01", t("whisper.model.title"),
+                          t("whisper.model.desc"),
                           self.model_combo))
 
         self.lang_edit = QLineEdit(cfg.whisper.language or "")
-        self.lang_edit.setPlaceholderText("auto · es · en · fr …")
-        bl.addWidget(_row("02", "LANGUAGE",
-                          "Empty for auto-detect.",
+        self.lang_edit.setPlaceholderText(t("whisper.lang.placeholder"))
+        bl.addWidget(_row("02", t("whisper.lang.title"),
+                          t("whisper.lang.desc"),
                           self.lang_edit))
 
         self.compute_combo = QComboBox()
         self.compute_combo.addItems(["int8", "int8_float16", "float16", "float32"])
         self.compute_combo.setCurrentText(cfg.whisper.compute_type)
-        bl.addWidget(_row("03", "PRECISION",
-                          "int8 is fast and accurate. float16/32 require GPU.",
+        bl.addWidget(_row("03", t("whisper.precision.title"),
+                          t("whisper.precision.desc"),
                           self.compute_combo))
 
         self.device_combo = QComboBox()
         self.device_combo.addItems(["auto", "cpu"])
         self.device_combo.setCurrentText(cfg.whisper.device)
-        bl.addWidget(_row("04", "DEVICE",
-                          "auto detects GPU (Metal / CUDA) when available.",
+        bl.addWidget(_row("04", t("whisper.device.title"),
+                          t("whisper.device.desc"),
                           self.device_combo))
 
         outer.addWidget(_scrollable(body), 1)
@@ -1045,9 +1051,9 @@ class OllamaPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(_page_header(
-            "004 · COPYDESK",
-            "OLLAMA",
-            "Local LLM that polishes the transcribed text.",
+            t("page.ollama.eyebrow"),
+            t("page.ollama.title"),
+            t("page.ollama.sub"),
         ))
 
         body = QFrame()
@@ -1055,19 +1061,19 @@ class OllamaPage(QWidget):
         bl.setContentsMargins(0, 0, 0, 0)
         bl.setSpacing(0)
 
-        self.enabled = QCheckBox("ENABLED")
+        self.enabled = QCheckBox(t("general.checkbox.enabled"))
         self.enabled.setChecked(cfg.ollama.enabled)
-        bl.addWidget(_row("01", "POLISH",
-                          "Disable to paste raw Whisper output.",
+        bl.addWidget(_row("01", t("ollama.enabled.title"),
+                          t("ollama.enabled.desc"),
                           self.enabled))
 
         self.url = QLineEdit(cfg.ollama.url)
-        bl.addWidget(_row("02", "URL", "Ollama server endpoint.", self.url))
+        bl.addWidget(_row("02", t("ollama.url.title"), t("ollama.url.desc"), self.url))
 
         self.model = QLineEdit(cfg.ollama.model)
         self.model.setPlaceholderText("gemma3:1b · llama3.2:3b · qwen2.5:3b")
-        bl.addWidget(_row("03", "MODEL",
-                          "Any model you've pulled with `ollama pull`.",
+        bl.addWidget(_row("03", t("ollama.model.title"),
+                          t("ollama.model.desc"),
                           self.model))
 
         self.timeout = QDoubleSpinBox()
@@ -1075,8 +1081,8 @@ class OllamaPage(QWidget):
         self.timeout.setDecimals(1)
         self.timeout.setSuffix(" S")
         self.timeout.setValue(cfg.ollama.timeout_s)
-        bl.addWidget(_row("04", "TIMEOUT",
-                          "If Ollama exceeds this, voxless pastes raw text.",
+        bl.addWidget(_row("04", t("ollama.timeout.title"),
+                          t("ollama.timeout.desc"),
                           self.timeout))
 
         self.temperature = QDoubleSpinBox()
@@ -1084,8 +1090,8 @@ class OllamaPage(QWidget):
         self.temperature.setSingleStep(0.1)
         self.temperature.setDecimals(2)
         self.temperature.setValue(cfg.ollama.temperature)
-        bl.addWidget(_row("05", "TEMPERATURE",
-                          "0 = literal · 1 = freer.",
+        bl.addWidget(_row("05", t("ollama.temperature.title"),
+                          t("ollama.temperature.desc"),
                           self.temperature))
 
         outer.addWidget(_scrollable(body), 1)
@@ -1109,9 +1115,9 @@ class PromptPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(_page_header(
-            "005 · INSTRUCTIONS",
-            "PROMPT",
-            "System prompt sent to Ollama. Style rules + few-shot examples.",
+            t("page.prompt.eyebrow"),
+            t("page.prompt.title"),
+            t("page.prompt.sub"),
         ))
 
         body = QFrame()
@@ -1131,7 +1137,7 @@ class PromptPage(QWidget):
         h = QHBoxLayout(bar)
         h.setContentsMargins(48, 18, 48, 24)
         h.addStretch(1)
-        h.addWidget(primary_btn("Save Prompt",
+        h.addWidget(primary_btn(t("btn.save_prompt"),
                                 lambda: self._on_save(self.editor.toPlainText())))
         outer.addWidget(bar)
 
@@ -1145,9 +1151,9 @@ class HistoryPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(_page_header(
-            "006 · LEDGER",
-            "HISTORY",
-            "Last 100 transcriptions. Double-click to copy · right-click for AI.",
+            t("page.history.eyebrow"),
+            t("page.history.title"),
+            t("page.history.sub"),
         ))
 
         body = QFrame()
@@ -1165,11 +1171,11 @@ class HistoryPage(QWidget):
 
         actions = QHBoxLayout()
         actions.addStretch(1)
-        actions.addWidget(default_btn("Copy", self._copy_selected))
-        ai_btn = primary_btn("AI Actions")
+        actions.addWidget(default_btn(t("btn.copy"), self._copy_selected))
+        ai_btn = primary_btn(t("btn.ai_actions"))
         ai_btn.clicked.connect(lambda: self._open_ai_menu(ai_btn))
         actions.addWidget(ai_btn)
-        actions.addWidget(default_btn("Clear", self.list.clear))
+        actions.addWidget(default_btn(t("btn.clear"), self.list.clear))
         bl.addLayout(actions)
 
         outer.addWidget(body, 1)
@@ -1251,9 +1257,9 @@ class PermissionsPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(_page_header(
-            "002 · ACCESS",
-            "PERMS",
-            "Required for global hotkey listening and microphone access.",
+            t("page.permissions.eyebrow"),
+            t("page.permissions.title"),
+            t("page.permissions.sub"),
         ))
 
         body = QFrame()
@@ -1273,11 +1279,7 @@ class PermissionsPage(QWidget):
         tip_wrap = QFrame()
         tip_wrap_layout = QVBoxLayout(tip_wrap)
         tip_wrap_layout.setContentsMargins(48, 18, 48, 4)
-        tip = QLabel(
-            "<b>NOTE</b> — if System Settings won't let you select voxless, "
-            "drag <code>/Applications/voxless.app</code> from Finder onto the "
-            "panel. After granting, come back and press <i>Verify</i>."
-        )
+        tip = QLabel(t("perm.tip"))
         tip.setObjectName("TipBox")
         tip.setWordWrap(True)
         tip.setTextFormat(Qt.TextFormat.RichText)
@@ -1292,7 +1294,7 @@ class PermissionsPage(QWidget):
         h = QHBoxLayout(bar)
         h.setContentsMargins(48, 14, 48, 24)
         h.addStretch(1)
-        h.addWidget(default_btn("Verify", self.refresh))
+        h.addWidget(default_btn(t("btn.verify"), self.refresh))
         outer.addWidget(bar)
 
     def _build_row(self, idx: str, perm: Permission) -> QWidget:
@@ -1302,7 +1304,7 @@ class PermissionsPage(QWidget):
         controls: list[QWidget] = [status]
         if perm.request is not None:
             controls.append(primary_btn(perm.request_label, self._make_request_handler(perm)))
-        controls.append(default_btn("Settings", perm.open_settings))
+        controls.append(default_btn(t("btn.settings"), perm.open_settings))
 
         spacer = QWidget()
         spacer.setFixedSize(0, 0)
@@ -1332,15 +1334,15 @@ class PermissionsPage(QWidget):
             f" border:1px solid;"
         )
         if st == "granted":
-            label.setText("● GRANTED")
+            label.setText(t("perm.granted"))
             label.setStyleSheet(base + f" color:{SUCCESS}; background:rgba(95,219,95,0.12);"
                                        f" border-color:{SUCCESS};")
         elif st == "denied":
-            label.setText("○ MISSING")
+            label.setText(t("perm.missing"))
             label.setStyleSheet(base + f" color:{ACCENT}; background:rgba(255,54,54,0.10);"
                                        f" border-color:{ACCENT};")
         else:
-            label.setText("— UNKNOWN")
+            label.setText(t("perm.unknown"))
             label.setStyleSheet(base + f" color:{INK_DIM}; background:transparent;"
                                        f" border-color:{BORDER};")
 
@@ -1380,25 +1382,25 @@ class MainWindow(QMainWindow):
         brand = QLabel("voxless")
         brand.setObjectName("SidebarBrand")
         side.addWidget(brand)
-        tag = QLabel("◉ DICTATE · LOCALLY")
+        tag = QLabel(t("side.tagline"))
         tag.setObjectName("SidebarTagline")
         side.addWidget(tag)
 
-        sec = QLabel("INDEX")
+        sec = QLabel(t("side.section"))
         sec.setObjectName("SidebarSection")
         side.addWidget(sec)
 
         self.nav = QListWidget()
         self.nav.setObjectName("NavList")
         self.nav.setFrameShape(QFrame.Shape.NoFrame)
-        for i, (_key, label) in enumerate(NAV_ITEMS, start=1):
+        for i, (_key, label) in enumerate(NAV_ITEMS(), start=1):
             item = QListWidgetItem(f"{i:03d}    {label}")
             item.setSizeHint(QSize(0, 34))
             self.nav.addItem(item)
         self.nav.setCurrentRow(0)
         side.addWidget(self.nav, 1)
 
-        version_lbl = QLabel("v 0.2.1 · LOCAL · 16K")
+        version_lbl = QLabel(f"v 0.2.2 · {t('side.versionsuffix')}")
         version_lbl.setObjectName("VersionFooter")
         side.addWidget(version_lbl)
 
@@ -1445,21 +1447,33 @@ class MainWindow(QMainWindow):
             save_config(cfg)
         except Exception as exc:
             log.exception("Failed to save config")
-            self.show_toast(f"SAVE FAILED · {exc}", variant="error")
+            self.show_toast(t("toast.save_failed", error=str(exc)), variant="error")
             return
+        # If language changed, swap i18n + re-apply UI text where we
+        # can without rebuilding everything.
+        if cfg.ui_language != self._cfg.ui_language:
+            set_lang(cfg.ui_language)
+            self._cfg = cfg
+            self._refresh_text()
+        else:
+            self._cfg = cfg
         self.home_page.set_hotkey(cfg.hotkey, cfg.hotkey_mode)
         self.config_changed.emit(cfg)
-        self.show_toast("SAVED · CONFIG APPLIED")
+        self.show_toast(t("toast.saved.config"))
 
-    def _handle_prompt_save(self, text: str) -> None:
+    def _refresh_text(self) -> None:
+        """Re-render text after a language switch."""
+        self.show_toast(t("toast.saved.config"), variant="info")
+
+    def _handle_prompt_save(self, text_str: str) -> None:
         try:
-            save_prompt(text)
+            save_prompt(text_str)
         except Exception as exc:
             log.exception("Failed to save prompt")
-            self.show_toast(f"SAVE FAILED · {exc}", variant="error")
+            self.show_toast(t("toast.save_failed", error=str(exc)), variant="error")
             return
-        self.prompt_changed.emit(text)
-        self.show_toast("SAVED · PROMPT APPLIED")
+        self.prompt_changed.emit(text_str)
+        self.show_toast(t("toast.saved.prompt"))
 
     def show_toast(self, text: str, variant: str = "success") -> None:
         toast = Toast(text, variant=variant, parent=self)  # type: ignore[arg-type]
