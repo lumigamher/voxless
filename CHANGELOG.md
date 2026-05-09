@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.0 — 2026-05-09
+
+- **System-level guard against the main window auto-opening**. The Python `show()` override in v0.2.9 wasn't enough — Qt's response to AppKit's `applicationShouldHandleReopen:` and other native paths bypasses the Python override and goes straight to C++. v0.3.0 also overrides `showEvent`, which fires for EVERY visibility transition regardless of how it's triggered. If we weren't authorized via `show_authorized()`, we schedule an immediate `hide()` on the next event-loop tick. The window cannot become visible without the explicit auth flag, period. This unblocks paste — voxless never grabs focus, so Cmd+V always lands in the target input.
+
 ## v0.2.9 — 2026-05-09
 
 - **Hard guard against the main window auto-opening**. The expected behaviour is: dock icon stays visible while voxless writes, the text gets pasted into the focused input, and the main window does NOT pop up. v0.2.9 enforces that with a hard authorization flag — `MainWindow.show()` and `MainWindow.setVisible(True)` are overridden to silently ignore any call that wasn't explicitly authorized via `show_authorized()`. The only call sites that authorize are: tray-icon click and first-run welcome. Anything else (Qt's own auto-show, NSApplicationDelegate's `applicationShouldHandleReopen`, focus events, paste-time activation cascades) gets dropped on the floor.

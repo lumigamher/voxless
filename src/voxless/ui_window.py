@@ -803,7 +803,7 @@ class HomePage(QWidget):
         self.eyebrow.setObjectName("HeroEyebrow")
         eye_row.addWidget(self.eyebrow, 0, Qt.AlignmentFlag.AlignVCenter)
         eye_row.addStretch(1)
-        meta = QLabel("ver 0.2.9")
+        meta = QLabel("ver 0.3.0")
         meta.setObjectName("HeroMetric")
         eye_row.addWidget(meta, 0, Qt.AlignmentFlag.AlignVCenter)
         wrap.addLayout(eye_row)
@@ -1405,7 +1405,7 @@ class MainWindow(QMainWindow):
         self.nav.setCurrentRow(0)
         side.addWidget(self.nav, 1)
 
-        version_lbl = QLabel(f"v 0.2.9 · {t('side.versionsuffix')}")
+        version_lbl = QLabel(f"v 0.3.0 · {t('side.versionsuffix')}")
         version_lbl.setObjectName("VersionFooter")
         side.addWidget(version_lbl)
 
@@ -1503,17 +1503,18 @@ class MainWindow(QMainWindow):
         super().raise_()
         super().activateWindow()
 
-    def show(self) -> None:  # type: ignore[override]
-        if self._show_authorized:
-            super().show()
-        else:
-            log.warning("MainWindow.show() blocked — not authorized")
-
-    def setVisible(self, visible: bool) -> None:  # type: ignore[override]
-        if visible and not self._show_authorized:
-            log.warning("MainWindow.setVisible(True) blocked — not authorized")
+    def showEvent(self, event) -> None:
+        """Final, system-level guard: this fires for EVERY visibility
+        transition — including those triggered by Qt's reopen handler
+        and AppKit's `applicationShouldHandleReopen:` — even when the
+        Python show() override is bypassed via the native C++ code path.
+        If we weren't authorized, hide on the next event-loop tick."""
+        if not self._show_authorized:
+            log.warning("MainWindow.showEvent fired without authorization — hiding")
+            QTimer.singleShot(0, super().hide)
+            event.ignore()
             return
-        super().setVisible(visible)
+        super().showEvent(event)
 
     def closeEvent(self, event) -> None:
         event.ignore()
