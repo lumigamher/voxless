@@ -61,6 +61,8 @@ def _start_single_instance_server(on_show) -> QLocalServer:
 
 def main() -> int:
     log = setup_logging()
+    from .config import CONFIG_PATH
+    is_first_run = not CONFIG_PATH.exists()
     try:
         ensure_user_files()
         cfg = load_config()
@@ -69,7 +71,7 @@ def main() -> int:
         return 1
 
     log.info(
-        "Starting voxless 0.1.9 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.1.10 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",
@@ -159,7 +161,13 @@ def main() -> int:
     signal.signal(signal.SIGINT, lambda *_: _on_quit())
 
     backend.start_background()
-    _show_window()
+
+    # Only auto-show the window on first run. On subsequent launches voxless
+    # lives only in the tray so it never steals focus from the app you're
+    # dictating into.
+    if is_first_run:
+        _show_window()
+
     rc = qt_app.exec()
     instance_server.close()
     return rc

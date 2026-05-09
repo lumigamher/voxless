@@ -21,7 +21,7 @@ from .llm import OllamaClient
 from .paster import Paster
 from .prompts import load_prompt
 from .recorder import SAMPLE_RATE, Recorder
-from . import sounds
+from . import frontmost, sounds
 from .transcriber import Transcriber
 
 log = logging.getLogger(__name__)
@@ -50,6 +50,7 @@ class App:
         self._llm = OllamaClient(cfg.ollama)
         self._paster = Paster(cfg.paste)
         self._prompt = load_prompt()
+        self._frontmost = None
 
         self.signals = AppSignals()
 
@@ -178,6 +179,7 @@ class App:
         if event == "press":
             if self._state != "idle":
                 return
+            self._frontmost = frontmost.get_frontmost()
             self._recorder.start()
             self._record_started_at = time.monotonic()
             self._set_state("recording")
@@ -215,5 +217,13 @@ class App:
             log.info("Cleaned: %s", text_clean)
 
             self.signals.transcribed.emit(text_raw, text_clean)
+
+            # Bring back whatever app the user was in BEFORE we trigger
+            # paste — protects against any momentary focus loss while the
+            # overlay or our windows were updating.
+            if self._frontmost is not None:
+                frontmost.restore(self._frontmost)
+                time.sleep(0.08)
             self._paster.paste(text_clean)
+            self._frontmost = None
             self._set_state("idle")

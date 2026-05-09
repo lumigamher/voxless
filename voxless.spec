@@ -44,6 +44,7 @@ hiddenimports = [
     "voxless.overlay",
     "voxless.sounds",
     "voxless.ai_actions",
+    "voxless.frontmost",
     "voxless.permissions",
     "PySide6.QtCore",
     "PySide6.QtGui",
@@ -122,8 +123,8 @@ if is_mac:
         info_plist={
             "CFBundleName": "voxless",
             "CFBundleDisplayName": "voxless",
-            "CFBundleVersion": "0.1.9",
-            "CFBundleShortVersionString": "0.1.9",
+            "CFBundleVersion": "0.1.10",
+            "CFBundleShortVersionString": "0.1.10",
             "LSUIElement": False,
             "LSMultipleInstancesProhibited": True,
             "NSMicrophoneUsageDescription": "voxless graba audio del micrófono para transcribir tu dictado localmente.",

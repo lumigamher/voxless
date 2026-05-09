@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.10 — 2026-05-08
+
+Critical paste-target fix.
+
+- **No auto-show on every launch**. The main window now opens only on first run (when the config file doesn't exist yet). After that voxless lives in the tray + overlay, so it never grabs focus from the app you're dictating into. The window opens on demand from the tray icon.
+- **Capture & restore frontmost app**. Right when you press the hotkey, voxless records which app was foremost (NSWorkspace on macOS, GetForegroundWindow on Windows). Right before pasting, it activates that app again, then sends Cmd+V / Ctrl+V. This guarantees the cleaned text lands where you wanted it, even if the overlay or our tray briefly competed for focus.
+
 ## v0.1.9 — 2026-05-08
 
 - **AI actions on history items**. Right-click any transcription (or click "ACCIONES IA" with a row selected) for: Mejorar redacción, Resumir, Tono formal, Tono casual, Traducir a inglés / a español. Each runs through Ollama with a dedicated system prompt and copies the result to your clipboard with a toast confirmation.

@@ -1505,7 +1505,7 @@ class MainWindow(QMainWindow):
         self.nav.setCurrentRow(0)
         side.addWidget(self.nav, 1)
 
-        version_lbl = QLabel("v 0.1.9 · LOCAL")
+        version_lbl = QLabel("v 0.1.10 · LOCAL")
         version_lbl.setObjectName("VersionFooter")
         side.addWidget(version_lbl)
 
