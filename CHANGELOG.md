@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.4 — 2026-05-08
+
+Decoupled paste from voxless's own focus state.
+
+- **Direct paste via AppleScript / SendInput**. We capture the foreground app's *name* (or HWND on Windows) when you press the hotkey. After cleanup, we put the cleaned text on the clipboard and dispatch `Cmd+V` (or `Ctrl+V`) **directly at that app** via `osascript "tell application X to activate" + System Events keystroke` (macOS) or `SetForegroundWindow + keybd_event` (Windows). voxless never touches its own focus.
+- **No more `NSApp.hide()`**. The previous "deactivate self" call was leaving voxless in a half-hidden state where the tray icon couldn't bring the window back. With direct-paste, we don't need to hide ourselves at all.
+- **No more "main window opens after transcription"**. We never call `activate` on a captured pid (which used to occasionally re-summon our own window) and we no longer need to hide+unhide.
+
 ## v0.2.3 — 2026-05-08
 
 Two critical fixes from user testing.

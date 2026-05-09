@@ -18,11 +18,12 @@ def _own_pid() -> int:
 
 
 def get_frontmost() -> Any:
-    """Return an opaque platform-specific handle representing the currently
-    frontmost app, or None if unavailable / if voxless itself is frontmost.
+    """Return an opaque platform-specific handle for the currently-foreground
+    app, or None if it's voxless / unavailable.
 
-    We deliberately never capture our own pid — restoring "voxless to the
-    front" later would re-open our main window and steal the cursor."""
+    macOS:   ("macos", pid, localized_name)
+    Windows: ("win", hwnd)
+    """
     if sys.platform == "darwin":
         try:
             from AppKit import NSWorkspace  # type: ignore
@@ -36,7 +37,8 @@ def get_frontmost() -> Any:
             bundle = (app.bundleIdentifier() or "").lower()
             if "voxless" in bundle:
                 return None
-            return ("macos", pid)
+            name = str(app.localizedName() or "")
+            return ("macos", pid, name)
         except Exception:
             log.debug("frontmost: NSWorkspace probe failed", exc_info=True)
             return None
@@ -57,6 +59,62 @@ def get_frontmost() -> Any:
             log.debug("frontmost: GetForegroundWindow failed", exc_info=True)
             return None
     return None
+
+
+def paste_into(handle: Any, text: str) -> bool:
+    """Activate the captured app and dispatch the platform-native paste
+    keystroke into it. Returns True if dispatched successfully.
+
+    macOS uses osascript (`tell application X to activate` + System Events
+    `keystroke v using command down`) so we hit the exact target app
+    without ever activating voxless. Windows uses SetForegroundWindow +
+    Ctrl+V via SendInput.
+    """
+    if not handle or not text:
+        return False
+    if sys.platform == "darwin":
+        try:
+            import subprocess
+            _platform, _pid, name = handle
+            if not name:
+                return False
+            # AppleScript wants single quotes escaped as ’ — use plain quoting
+            safe_name = name.replace('"', '')
+            script = (
+                f'tell application "{safe_name}" to activate\n'
+                'delay 0.08\n'
+                'tell application "System Events" to keystroke "v" using command down'
+            )
+            subprocess.Popen(
+                ["osascript", "-e", script],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return True
+        except Exception:
+            log.debug("paste_into: osascript failed", exc_info=True)
+            return False
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            import time
+            user32 = ctypes.windll.user32
+            _platform, hwnd = handle
+            user32.SetForegroundWindow(hwnd)
+            time.sleep(0.05)
+            # Send Ctrl+V via keybd_event (legacy but works on Windows 10/11)
+            VK_CONTROL = 0x11
+            VK_V = 0x56
+            KEYEVENTF_KEYUP = 0x0002
+            user32.keybd_event(VK_CONTROL, 0, 0, 0)
+            user32.keybd_event(VK_V, 0, 0, 0)
+            user32.keybd_event(VK_V, 0, KEYEVENTF_KEYUP, 0)
+            user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+            return True
+        except Exception:
+            log.debug("paste_into: Windows paste failed", exc_info=True)
+            return False
+    return False
 
 
 def deactivate_self() -> bool:

@@ -50,6 +50,7 @@ class App:
         self._llm = OllamaClient(cfg.ollama)
         self._paster = Paster(cfg.paste)
         self._prompt = load_prompt()
+        self._target_app = None  # captured via frontmost.get_frontmost on press
 
         self.signals = AppSignals()
 
@@ -179,6 +180,12 @@ class App:
             if self._state != "idle":
                 log.debug("press ignored — state=%s", self._state)
                 return
+            # Capture the app the user is currently in so we can dispatch
+            # paste straight at it later. None means voxless itself or
+            # nothing to capture — we'll fall back to a generic Cmd+V.
+            self._target_app = frontmost.get_frontmost()
+            if self._target_app:
+                log.info("captured target app: %s", self._target_app)
             self._recorder.start()
             self._record_started_at = time.monotonic()
             self._set_state("recording")
@@ -220,16 +227,27 @@ class App:
 
                 self.signals.transcribed.emit(text_raw, text_clean)
 
-                # If voxless somehow stole focus while we were transcribing,
-                # hide ourselves so macOS / Windows hands focus back to the
-                # previously-active app. Don't capture/restore by handle —
-                # the OS picks the right "next app" more reliably than us.
+                # Strategy: put the cleaned text on the clipboard, then
+                # dispatch paste DIRECTLY at the captured target app via
+                # AppleScript / SendInput. Never touch voxless's own
+                # focus — no hide, no deactivate, no activate-self.
                 try:
-                    if frontmost.deactivate_self():
-                        time.sleep(0.18)
+                    import pyperclip
+                    pyperclip.copy(text_clean)
                 except Exception:
-                    log.exception("deactivate_self failed; pasting anyway")
+                    log.exception("Failed to set clipboard")
 
-                self._paster.paste(text_clean)
+                dispatched = False
+                if self._target_app is not None:
+                    try:
+                        dispatched = frontmost.paste_into(
+                            self._target_app, text_clean
+                        )
+                    except Exception:
+                        log.exception("paste_into failed")
+                if not dispatched:
+                    # Fallback: send Cmd+V to whatever currently has focus.
+                    self._paster.paste(text_clean)
             finally:
+                self._target_app = None
                 self._set_state("idle")
