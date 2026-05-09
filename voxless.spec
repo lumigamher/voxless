@@ -124,9 +124,9 @@ if is_mac:
         info_plist={
             "CFBundleName": "voxless",
             "CFBundleDisplayName": "voxless",
-            "CFBundleVersion": "0.2.5",
-            "CFBundleShortVersionString": "0.2.5",
-            "LSUIElement": False,
+            "CFBundleVersion": "0.2.6",
+            "CFBundleShortVersionString": "0.2.6",
+            "LSUIElement": True,
             "LSMultipleInstancesProhibited": True,
             "NSMicrophoneUsageDescription": "voxless graba audio del micrófono para transcribir tu dictado localmente.",
             "NSAppleEventsUsageDescription": "voxless usa eventos del sistema para pegar la transcripción.",

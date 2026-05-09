@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.6 — 2026-05-09
+
+Architectural fix for the recurring "voxless takes focus / opens its window" bug.
+
+- **voxless is now an accessory app on macOS** (`NSApplicationActivationPolicyAccessory` set at startup, `LSUIElement: True` in Info.plist). No dock icon, no Cmd-Tab listing — the app lives in the menu-bar tray, exactly like Linear / Raycast / Slack do for their tray UIs. The overlay can no longer drag the main window into focus, because there's no "main app" to activate. The widget is fully decoupled from the main window.
+- The main window remains reachable from the tray icon's menu, and behaves like a normal window when you bring it up — but it never auto-shows again.
+
 ## v0.2.5 — 2026-05-08
 
 - **Two-step paste**: activate target app via `osascript` (no permissions required) → wait 180 ms → send Cmd+V via pynput (which already holds Accessibility). Fixes the silent paste-failure caused by `osascript`'s `System Events keystroke` requiring its own Accessibility grant we can't ensure for end users.
