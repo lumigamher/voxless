@@ -803,7 +803,7 @@ class HomePage(QWidget):
         self.eyebrow.setObjectName("HeroEyebrow")
         eye_row.addWidget(self.eyebrow, 0, Qt.AlignmentFlag.AlignVCenter)
         eye_row.addStretch(1)
-        meta = QLabel("ver 0.2.8")
+        meta = QLabel("ver 0.2.9")
         meta.setObjectName("HeroMetric")
         eye_row.addWidget(meta, 0, Qt.AlignmentFlag.AlignVCenter)
         wrap.addLayout(eye_row)
@@ -1360,6 +1360,11 @@ class MainWindow(QMainWindow):
 
     def __init__(self, cfg: Config) -> None:
         super().__init__()
+        # Hard guard: the window can only become visible when explicitly
+        # authorized via show_authorized(). Any other show() call (Qt's
+        # auto-show, NSApplicationDelegate's applicationShouldHandleReopen,
+        # focus events, etc) is silently ignored.
+        self._show_authorized = False
         self.setWindowTitle("voxless")
         self.setMinimumSize(QSize(960, 660))
         self.resize(QSize(1040, 720))
@@ -1400,7 +1405,7 @@ class MainWindow(QMainWindow):
         self.nav.setCurrentRow(0)
         side.addWidget(self.nav, 1)
 
-        version_lbl = QLabel(f"v 0.2.8 · {t('side.versionsuffix')}")
+        version_lbl = QLabel(f"v 0.2.9 · {t('side.versionsuffix')}")
         version_lbl.setObjectName("VersionFooter")
         side.addWidget(version_lbl)
 
@@ -1489,9 +1494,30 @@ class MainWindow(QMainWindow):
         self.history_page.push(raw, clean)
         self.home_page.push_history_preview(clean if clean else raw)
 
+    def show_authorized(self) -> None:
+        """The ONLY sanctioned way to make this window visible."""
+        self._show_authorized = True
+        if hasattr(self, "_user_opened_flag"):
+            self._user_opened_flag["flag"] = True
+        super().show()
+        super().raise_()
+        super().activateWindow()
+
+    def show(self) -> None:  # type: ignore[override]
+        if self._show_authorized:
+            super().show()
+        else:
+            log.warning("MainWindow.show() blocked — not authorized")
+
+    def setVisible(self, visible: bool) -> None:  # type: ignore[override]
+        if visible and not self._show_authorized:
+            log.warning("MainWindow.setVisible(True) blocked — not authorized")
+            return
+        super().setVisible(visible)
+
     def closeEvent(self, event) -> None:
         event.ignore()
-        # Reset the user-opened flag if we have it (set via __main__).
+        self._show_authorized = False
         if hasattr(self, "_user_opened_flag"):
             self._user_opened_flag["flag"] = False
-        self.hide()
+        super().hide()

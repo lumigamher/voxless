@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.9 — 2026-05-09
+
+- **Hard guard against the main window auto-opening**. The expected behaviour is: dock icon stays visible while voxless writes, the text gets pasted into the focused input, and the main window does NOT pop up. v0.2.9 enforces that with a hard authorization flag — `MainWindow.show()` and `MainWindow.setVisible(True)` are overridden to silently ignore any call that wasn't explicitly authorized via `show_authorized()`. The only call sites that authorize are: tray-icon click and first-run welcome. Anything else (Qt's own auto-show, NSApplicationDelegate's `applicationShouldHandleReopen`, focus events, paste-time activation cascades) gets dropped on the floor.
+- closeEvent resets the authorization flag, so closing the window via the X button means the next show requires re-authorization.
+
 ## v0.2.8 — 2026-05-09
 
 - **Dock icon back**. Reverted v0.2.6's accessory-app switch (`LSUIElement: True` / `setActivationPolicy(.accessory)`) — voxless now shows in the Dock and Cmd-Tab again. The hotkey listener was also flaky in accessory mode for some users; reverting fixes both.

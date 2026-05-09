@@ -74,7 +74,7 @@ def main() -> int:
     set_lang(cfg.ui_language)
 
     log.info(
-        "Starting voxless 0.2.8 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.2.9 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",
@@ -118,9 +118,7 @@ def main() -> int:
 
     def _show_window() -> None:
         user_opened_window["flag"] = True
-        window.show()
-        window.raise_()
-        window.activateWindow()
+        window.show_authorized()
 
     def _on_quit() -> None:
         log.info("Quit requested")
