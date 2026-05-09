@@ -803,7 +803,7 @@ class HomePage(QWidget):
         self.eyebrow.setObjectName("HeroEyebrow")
         eye_row.addWidget(self.eyebrow, 0, Qt.AlignmentFlag.AlignVCenter)
         eye_row.addStretch(1)
-        meta = QLabel("ver 0.2.4")
+        meta = QLabel("ver 0.2.5")
         meta.setObjectName("HeroMetric")
         eye_row.addWidget(meta, 0, Qt.AlignmentFlag.AlignVCenter)
         wrap.addLayout(eye_row)
@@ -1400,7 +1400,7 @@ class MainWindow(QMainWindow):
         self.nav.setCurrentRow(0)
         side.addWidget(self.nav, 1)
 
-        version_lbl = QLabel(f"v 0.2.4 · {t('side.versionsuffix')}")
+        version_lbl = QLabel(f"v 0.2.5 · {t('side.versionsuffix')}")
         version_lbl.setObjectName("VersionFooter")
         side.addWidget(version_lbl)
 
@@ -1491,4 +1491,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         event.ignore()
+        # Reset the user-opened flag if we have it (set via __main__).
+        if hasattr(self, "_user_opened_flag"):
+            self._user_opened_flag["flag"] = False
         self.hide()

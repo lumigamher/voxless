@@ -74,7 +74,7 @@ def main() -> int:
     set_lang(cfg.ui_language)
 
     log.info(
-        "Starting voxless 0.2.4 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.2.5 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",
@@ -95,6 +95,9 @@ def main() -> int:
     window = MainWindow(cfg)
     overlay = RecorderOverlay()
 
+    user_opened_window: dict = {"flag": False}
+    window._user_opened_flag = user_opened_window  # for closeEvent reset
+
     def _on_state(state: str) -> None:
         window.set_state(state)
         tray.set_state(state)
@@ -102,11 +105,19 @@ def main() -> int:
             overlay.set_state(state)
         else:
             overlay.hide()
+        # Defensive: if voxless somehow gained focus during the recording
+        # cycle and our main window snuck visible, hide it once we're idle
+        # again — UNLESS the user opened it on purpose from the tray.
+        if state == "idle" and not user_opened_window["flag"]:
+            if window.isVisible():
+                log.info("hiding main window after idle (was not user-opened)")
+                window.hide()
 
     def _on_transcribed(raw: str, clean: str) -> None:
         window.push_history(raw, clean)
 
     def _show_window() -> None:
+        user_opened_window["flag"] = True
         window.show()
         window.raise_()
         window.activateWindow()

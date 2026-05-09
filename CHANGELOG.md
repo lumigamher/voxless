@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.5 — 2026-05-08
+
+- **Two-step paste**: activate target app via `osascript` (no permissions required) → wait 180 ms → send Cmd+V via pynput (which already holds Accessibility). Fixes the silent paste-failure caused by `osascript`'s `System Events keystroke` requiring its own Accessibility grant we can't ensure for end users.
+- **Force-hide main window when state returns to idle**, *unless* the user explicitly opened the window from the tray. Even if voxless's main window somehow snuck visible during recording, it gets hidden as soon as we go back to idle.
+
 ## v0.2.4 — 2026-05-08
 
 Decoupled paste from voxless's own focus state.

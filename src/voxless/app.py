@@ -227,27 +227,19 @@ class App:
 
                 self.signals.transcribed.emit(text_raw, text_clean)
 
-                # Strategy: put the cleaned text on the clipboard, then
-                # dispatch paste DIRECTLY at the captured target app via
-                # AppleScript / SendInput. Never touch voxless's own
-                # focus — no hide, no deactivate, no activate-self.
-                try:
-                    import pyperclip
-                    pyperclip.copy(text_clean)
-                except Exception:
-                    log.exception("Failed to set clipboard")
-
-                dispatched = False
+                # Strategy:
+                #  1. Activate the target app (osascript on macOS — needs
+                #     no permissions; SetForegroundWindow on Windows).
+                #  2. Give the OS time to switch focus.
+                #  3. Send Cmd+V / Ctrl+V via pynput from voxless — voxless
+                #     already holds the Accessibility grant so this works.
                 if self._target_app is not None:
                     try:
-                        dispatched = frontmost.paste_into(
-                            self._target_app, text_clean
-                        )
+                        if frontmost.activate_app(self._target_app):
+                            time.sleep(0.18)
                     except Exception:
-                        log.exception("paste_into failed")
-                if not dispatched:
-                    # Fallback: send Cmd+V to whatever currently has focus.
-                    self._paster.paste(text_clean)
+                        log.exception("activate_app failed; pasting anyway")
+                self._paster.paste(text_clean)
             finally:
                 self._target_app = None
                 self._set_state("idle")

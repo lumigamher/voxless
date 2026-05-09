@@ -61,16 +61,14 @@ def get_frontmost() -> Any:
     return None
 
 
-def paste_into(handle: Any, text: str) -> bool:
-    """Activate the captured app and dispatch the platform-native paste
-    keystroke into it. Returns True if dispatched successfully.
+def activate_app(handle: Any) -> bool:
+    """Bring the captured app to the foreground without activating voxless.
 
-    macOS uses osascript (`tell application X to activate` + System Events
-    `keystroke v using command down`) so we hit the exact target app
-    without ever activating voxless. Windows uses SetForegroundWindow +
-    Ctrl+V via SendInput.
+    macOS: osascript "tell application X to activate" — no permissions
+    needed for the activation itself.
+    Windows: SetForegroundWindow on the captured HWND.
     """
-    if not handle or not text:
+    if not handle:
         return False
     if sys.platform == "darwin":
         try:
@@ -78,41 +76,25 @@ def paste_into(handle: Any, text: str) -> bool:
             _platform, _pid, name = handle
             if not name:
                 return False
-            # AppleScript wants single quotes escaped as ’ — use plain quoting
             safe_name = name.replace('"', '')
-            script = (
-                f'tell application "{safe_name}" to activate\n'
-                'delay 0.08\n'
-                'tell application "System Events" to keystroke "v" using command down'
-            )
             subprocess.Popen(
-                ["osascript", "-e", script],
+                ["osascript", "-e", f'tell application "{safe_name}" to activate'],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
             return True
         except Exception:
-            log.debug("paste_into: osascript failed", exc_info=True)
+            log.debug("activate_app: osascript failed", exc_info=True)
             return False
     if sys.platform.startswith("win"):
         try:
             import ctypes
-            import time
             user32 = ctypes.windll.user32
             _platform, hwnd = handle
             user32.SetForegroundWindow(hwnd)
-            time.sleep(0.05)
-            # Send Ctrl+V via keybd_event (legacy but works on Windows 10/11)
-            VK_CONTROL = 0x11
-            VK_V = 0x56
-            KEYEVENTF_KEYUP = 0x0002
-            user32.keybd_event(VK_CONTROL, 0, 0, 0)
-            user32.keybd_event(VK_V, 0, 0, 0)
-            user32.keybd_event(VK_V, 0, KEYEVENTF_KEYUP, 0)
-            user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
             return True
         except Exception:
-            log.debug("paste_into: Windows paste failed", exc_info=True)
+            log.debug("activate_app: SetForegroundWindow failed", exc_info=True)
             return False
     return False
 
