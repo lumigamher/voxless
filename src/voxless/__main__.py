@@ -25,6 +25,32 @@ _REOPEN_HANDLER = None  # keep a Python reference so it isn't GC'd
 _REOPEN_SHOW_CALLBACK = None  # set by main() — fires when user clicks dock icon
 
 
+def _set_accessory_activation_policy(log) -> None:
+    """Make voxless a UIElement / Accessory app at the AppKit level. This
+    is the canonical macOS pattern for background utilities:
+      - no dock icon
+      - no Cmd+Tab presence
+      - the process literally cannot become "frontmost"
+      - AppKit never auto-activates the process when a Qt window appears
+
+    The bundled .app sets LSUIElement: True in Info.plist so this is
+    already true at launch time. This call is a belt-and-suspenders
+    fallback for unbundled dev runs (e.g. `python -m voxless`) so
+    behaviour stays identical with or without the .app bundle.
+
+    Without this, AppKit activates voxless when our overlay or main
+    window becomes visible, which steals focus from the user's target
+    app and bounces the dock icon — the recurring "ventana y dock
+    saltan al tiempo" bug across v0.2.9–v0.3.5."""
+    try:
+        from AppKit import NSApplication  # type: ignore
+        # NSApplicationActivationPolicyAccessory = 1
+        ok = NSApplication.sharedApplication().setActivationPolicy_(1)
+        log.info("Set activation policy to accessory (ok=%s)", ok)
+    except Exception:
+        log.exception("Could not set accessory activation policy")
+
+
 def _install_reopen_router(log) -> None:
     """Route macOS' kAEReopenApplication AppleEvent to our show-window
     callback. kAEReopenApplication fires when the user clicks the dock
@@ -35,7 +61,7 @@ def _install_reopen_router(log) -> None:
 
     v0.3.3 installed a handler that SWALLOWED this event, which also
     killed legitimate dock-click activation — the user could not open
-    the window at all without resorting to the tray menu. v0.3.5 routes
+    the window at all without resorting to the tray menu. v0.3.6 routes
     the event into our authorized show path. Unsolicited shows are
     still filtered by MainWindow.event() / showEvent() guards."""
     global _REOPEN_HANDLER
@@ -122,7 +148,7 @@ def main() -> int:
     set_lang(cfg.ui_language)
 
     log.info(
-        "Starting voxless 0.3.5 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.3.6 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",
@@ -135,10 +161,18 @@ def main() -> int:
     qt_app.setOrganizationName("voxless")
     qt_app.setQuitOnLastWindowClosed(False)
 
-    # Route macOS' "reopen application" AppleEvent (kAEReopenApplication)
-    # to our show-window callback. The callback is wired below once
-    # _show_window has been defined.
     if sys.platform == "darwin":
+        # Demote voxless to a background utility BEFORE any Qt window is
+        # constructed. After this call, AppKit won't auto-activate the
+        # process when our overlay / main window appears — that's what
+        # used to bounce the dock icon and steal focus during dictation.
+        _set_accessory_activation_policy(log)
+
+        # Route macOS' "reopen application" AppleEvent (kAEReopenApplication)
+        # to our show-window callback. With LSUIElement: True there is no
+        # dock icon, but reopen events still fire when the user double-
+        # clicks the .app from Finder or activates via Spotlight while
+        # voxless is running — both should still open the window.
         _install_reopen_router(log)
 
     if _try_send_show_to_existing():

@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.6 — 2026-05-11
+
+- **voxless is now a background utility (`LSUIElement: True`)**. No dock icon, no Cmd+Tab presence, no AppKit auto-activation. This is the canonical macOS pattern for hotkey daemons and is the only way to **strictly** prevent voxless from bouncing the dock / stealing focus while dictating. The `showEvent` + `event()` + AppleEvent guards survived from v0.3.1–v0.3.5 as a defence-in-depth layer, but the root cause was always that a regular .app with a dock icon will get activated by AppKit when ANY of its windows becomes visible — no Python-side guard can prevent that. The previous accessory-mode attempt (v0.2.6) was reverted because the hotkey was "flaky"; that was almost certainly the stale-TCC-entry problem we resolved with the stable `co.lumigamher.voxless` bundle identifier.
+- **`show_authorized()` now calls `NSApplication.activateIgnoringOtherApps_`** so the main window comes to the front when opened via tray / Spotlight / Finder. Without this, in accessory mode the window would open behind every other app.
+- **To open the main window:** click the menu-bar tray icon, double-click `voxless.app` from Finder, or launch via Spotlight. Dock-click no longer works because there is no dock icon.
+
 ## v0.3.5 — 2026-05-11
 
 - **Dock-click now opens the window again**. v0.3.3's `kAEReopenApplication` blocker was overzealous — it swallowed the event entirely, which also killed the user's intentional dock-click activation. v0.3.5 *routes* the event into the authorized show path instead of swallowing it. The `showEvent` / `event()` guards on `MainWindow` still filter unsolicited shows, so this preserves the defence-in-depth without breaking normal UX.
