@@ -67,10 +67,7 @@ class Recorder:
             return np.zeros(0, dtype=np.float32)
         with self._lock:
             self._is_recording = False
-        if self._stream is not None:
-            self._stream.stop()
-            self._stream.close()
-            self._stream = None
+        self._close_stream_with_timeout(timeout_s=2.0)
         with self._lock:
             if not self._chunks:
                 return np.zeros(0, dtype=np.float32)
@@ -78,6 +75,44 @@ class Recorder:
             self._chunks = []
         log.debug("Recording stopped: %d samples (%.2fs)", len(audio), len(audio) / self._sample_rate)
         return audio
+
+    def abort(self) -> None:
+        """Force-stop the recorder from ANY thread without raising. Safe to
+        call when stop() or the PortAudio stream is wedged. Discards captured
+        audio (this is the panic exit path, not the happy path)."""
+        with self._lock:
+            self._is_recording = False
+            self._chunks = []
+        self._close_stream_with_timeout(timeout_s=2.0)
+
+    def _close_stream_with_timeout(self, timeout_s: float) -> None:
+        """Close the PortAudio stream in a side thread with a hard deadline.
+        PortAudio on macOS occasionally hangs forever inside stream.stop()
+        when the audio HAL deadlocks (Bluetooth disconnect, sample-rate
+        renegotiation, USB device disappearance). If we don't time-bound the
+        call, the worker thread freezes indefinitely. If the close hangs we
+        leak the stream object — the OS will reclaim it when the process
+        exits. The next start() will allocate a fresh one."""
+        stream = self._stream
+        if stream is None:
+            return
+        self._stream = None
+
+        def _shutdown() -> None:
+            try:
+                stream.stop()
+            except Exception:
+                log.debug("stream.stop() raised during shutdown", exc_info=True)
+            try:
+                stream.close()
+            except Exception:
+                log.debug("stream.close() raised during shutdown", exc_info=True)
+
+        worker = threading.Thread(target=_shutdown, daemon=True, name="voxless-stream-close")
+        worker.start()
+        worker.join(timeout=timeout_s)
+        if worker.is_alive():
+            log.warning("PortAudio stream close hung past %.1fs — leaking stream", timeout_s)
 
     def duration_so_far_ms(self) -> int:
         with self._lock:

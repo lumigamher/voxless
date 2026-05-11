@@ -1,6 +1,6 @@
 [project]
 name = "voxless"
-version = "0.3.3"
+version = "0.3.4"
 description = "Local Typeless clone — push-to-talk dictation with Whisper + Ollama"
 requires-python = ">=3.11"
 authors = [{ name = "Luis Miguel" }]

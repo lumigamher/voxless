@@ -61,7 +61,12 @@ class App:
         )
 
         self._stop = threading.Event()
-        self._worker = threading.Thread(target=self._run_worker, daemon=True, name="voxless-worker")
+        # Heartbeat: the worker stamps this at the top of every loop tick.
+        # The watchdog inspects it to decide whether the worker is alive or
+        # wedged inside _handle_event (e.g. PortAudio hang in recorder.stop).
+        self._worker_heartbeat: float = time.monotonic()
+        self._worker_lock = threading.Lock()
+        self._worker = self._spawn_worker()
         self._watchdog = threading.Thread(target=self._run_watchdog, daemon=True, name="voxless-watchdog")
 
     @property
@@ -70,7 +75,9 @@ class App:
 
     def start_background(self) -> None:
         self._hotkey.start()
-        self._worker.start()
+        # Worker thread was already started in __init__ via _spawn_worker
+        # so it can be respawned by the watchdog at any time without a
+        # lifecycle mismatch.
         self._watchdog.start()
         log.info("voxless backend ready — hotkey: %s", self._cfg.hotkey)
 
@@ -145,23 +152,85 @@ class App:
         self._state = state
         self.signals.state_changed.emit(state)
 
+    def _spawn_worker(self) -> threading.Thread:
+        t = threading.Thread(target=self._run_worker, daemon=True, name="voxless-worker")
+        t.start()
+        return t
+
+    def _force_recover(self, reason: str) -> None:
+        """Bypass the worker queue and reset state directly. Called by the
+        watchdog when it detects that the worker can't recover on its own
+        (PortAudio hang, missed release, deadlock). Safe to call from any
+        thread — Recorder.abort() is thread-safe and signals are queued."""
+        log.warning("watchdog: force-recovering — %s", reason)
+        try:
+            self._recorder.abort()
+        except Exception:
+            log.exception("recorder.abort() raised during force-recovery")
+        # Drain any stale press/release events the user (or earlier watchdog
+        # ticks) queued up while the worker was wedged. Leaving them in the
+        # queue would cause spurious recordings the moment the worker wakes.
+        drained = 0
+        while True:
+            try:
+                self._events.get_nowait()
+                drained += 1
+            except queue.Empty:
+                break
+        if drained:
+            log.warning("watchdog: drained %d stale events from queue", drained)
+        self._target_app = None
+        self._record_started_at = None
+        self._set_state("idle")
+
+    def _replace_worker_if_dead(self) -> None:
+        """If the worker thread looks dead (no heartbeat for ~60s and not
+        alive, OR alive but stuck inside _handle_event), spawn a fresh one.
+        The old thread leaks if it's still alive — the OS will reclaim it
+        when the process exits. This is the panic exit path; under normal
+        operation the worker is always responsive."""
+        worker = self._worker
+        with self._worker_lock:
+            stale = time.monotonic() - self._worker_heartbeat
+            if not worker.is_alive():
+                log.error("worker thread died — respawning (heartbeat stale %.1fs)", stale)
+                self._worker_heartbeat = time.monotonic()
+                self._worker = self._spawn_worker()
+            elif stale > 60.0:
+                log.error(
+                    "worker thread heartbeat stale for %.1fs — spawning replacement; "
+                    "old thread leaked", stale,
+                )
+                self._worker_heartbeat = time.monotonic()
+                self._worker = self._spawn_worker()
+
     def _run_watchdog(self) -> None:
-        """Background watchdog: if state is stuck in recording for more
-        than ~90s the system is probably wedged (pynput missed a release,
-        AppKit deadlock, the user walked away mid-dictation, etc). Force
-        a synthetic release so the state machine recovers."""
+        """Background watchdog with teeth. Two-stage recovery:
+
+        Stage 1 (stuck > 30s): the worker may have simply missed a release
+        event. Force-recover directly — abort the recorder, drop the queue,
+        reset state. This bypasses the worker entirely, so it works even if
+        the worker is blocked inside recorder.stop().
+
+        Stage 2 (worker heartbeat stale > 60s): the worker thread is dead
+        or wedged in a way our recover couldn't fix (e.g. blocked on a
+        Python GIL contention, an Ollama timeout, etc). Spawn a replacement
+        worker and abandon the old one to OS-level reclamation."""
         while not self._stop.wait(2.0):
             if self._state == "recording" and self._record_started_at is not None:
                 age = time.monotonic() - self._record_started_at
                 if age > 30.0:
-                    log.warning("watchdog: stuck recording for %.1fs — forcing release", age)
-                    try:
-                        self._events.put("release")
-                    except Exception:
-                        pass
+                    self._force_recover(f"stuck recording for {age:.1f}s")
+                    self._replace_worker_if_dead()
+                    continue
+            # Even if state isn't 'recording', a dead worker is fatal —
+            # no event will ever be processed again. Detect and respawn.
+            self._replace_worker_if_dead()
 
     def _run_worker(self) -> None:
         while not self._stop.is_set():
+            with self._worker_lock:
+                self._worker_heartbeat = time.monotonic()
             try:
                 event = self._events.get(timeout=0.5)
             except queue.Empty:
@@ -221,20 +290,24 @@ class App:
             # try/finally guarantees we always return to idle, even if
             # transcription / Ollama / paste raises. No more "stuck in REC".
             try:
+                # Pin the start time and flip state BEFORE recorder.stop()
+                # so the watchdog (which only triggers on state==recording)
+                # stops re-firing the moment we acknowledge the release.
+                # Otherwise a slow PortAudio close would let the watchdog
+                # spam the queue with phantom release events.
+                started_at = self._record_started_at or time.monotonic()
+                self._record_started_at = None
+                self._set_state("processing")
                 audio = self._recorder.stop()
                 if self._cfg.sound_feedback:
                     sounds.play_stop()
-                duration_ms = int(
-                    (time.monotonic() - (self._record_started_at or 0)) * 1000
-                )
-                self._record_started_at = None
+                duration_ms = int((time.monotonic() - started_at) * 1000)
 
                 min_ms = self._cfg.min_record_ms
                 if duration_ms < min_ms or audio.size < SAMPLE_RATE * min_ms / 1000:
                     log.info("Ignoring short recording (%dms)", duration_ms)
                     return
 
-                self._set_state("processing")
                 text_raw = self._transcriber.transcribe(audio)
                 if not text_raw:
                     return

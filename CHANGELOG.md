@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.4 — 2026-05-11
+
+- **Definitive fix for stuck-recording**. The previous 30 s watchdog only enqueued synthetic release events, which were useless when the worker thread itself was wedged inside `recorder.stop()` (PortAudio on macOS can hang forever when an audio device changes mid-stream). The new watchdog has teeth:
+  - **Stage 1 (stuck > 30 s)**: bypass the worker queue entirely. Abort the audio stream from the watchdog thread, drain the event queue, and reset state to idle directly. Works even when the worker is fully blocked.
+  - **Stage 2 (worker heartbeat stale > 60 s)**: declare the worker dead, spawn a replacement, and abandon the old thread. Voxless never gets permanently wedged.
+- **`Recorder.stop()` and `Recorder.abort()` are now time-bounded**. PortAudio's `stream.stop()` runs in a side thread with a 2 s hard deadline; if it hangs we leak the stream object and move on. The old behaviour blocked the worker indefinitely.
+- **Release flips state to `processing` before touching the audio stream**, so the watchdog stops re-firing the instant we acknowledge a release. Previously a slow audio close could let the watchdog spam phantom releases into the queue.
+
 ## v0.3.3 — 2026-05-09
 
 - **Hotkey-press-while-recording = forced release**. If you press the hotkey again while a recording is already in flight, voxless treats the second press as a definitive release. Fixes the rare case where pynput drops a release event and recording would otherwise hang. Press again = stop now.
