@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.7 — 2026-05-11
+
+- **Reverted to a regular dock-icon app** (LSUIElement: False). The user wants the dock icon visible.
+- **Mutual exclusion: overlay and main window are NEVER visible at the same time.** When state transitions to recording / processing, if the main window happened to be open it is hidden and its auth flag is cleared — only the floating overlay shows. Symmetrically, opening the main window (tray / Spotlight / Finder) hides the overlay.
+- **Auto-deactivate after overlay appears.** macOS auto-activates dock-icon apps whenever any of their windows becomes visible — that's what bounces the dock during dictation. Right after the overlay shows for recording, voxless calls `NSApplication.deactivate()` so focus snaps back to the user's target app within ~60 ms. The dock no longer bounces during dictation.
+
 ## v0.3.6 — 2026-05-11
 
 - **voxless is now a background utility (`LSUIElement: True`)**. No dock icon, no Cmd+Tab presence, no AppKit auto-activation. This is the canonical macOS pattern for hotkey daemons and is the only way to **strictly** prevent voxless from bouncing the dock / stealing focus while dictating. The `showEvent` + `event()` + AppleEvent guards survived from v0.3.1–v0.3.5 as a defence-in-depth layer, but the root cause was always that a regular .app with a dock icon will get activated by AppKit when ANY of its windows becomes visible — no Python-side guard can prevent that. The previous accessory-mode attempt (v0.2.6) was reverted because the hotkey was "flaky"; that was almost certainly the stale-TCC-entry problem we resolved with the stable `co.lumigamher.voxless` bundle identifier.

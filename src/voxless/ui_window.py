@@ -804,7 +804,7 @@ class HomePage(QWidget):
         self.eyebrow.setObjectName("HeroEyebrow")
         eye_row.addWidget(self.eyebrow, 0, Qt.AlignmentFlag.AlignVCenter)
         eye_row.addStretch(1)
-        meta = QLabel("ver 0.3.6")
+        meta = QLabel("ver 0.3.7")
         meta.setObjectName("HeroMetric")
         eye_row.addWidget(meta, 0, Qt.AlignmentFlag.AlignVCenter)
         wrap.addLayout(eye_row)
@@ -1406,7 +1406,7 @@ class MainWindow(QMainWindow):
         self.nav.setCurrentRow(0)
         side.addWidget(self.nav, 1)
 
-        version_lbl = QLabel(f"v 0.3.6 · {t('side.versionsuffix')}")
+        version_lbl = QLabel(f"v 0.3.7 · {t('side.versionsuffix')}")
         version_lbl.setObjectName("VersionFooter")
         side.addWidget(version_lbl)
 
@@ -1496,16 +1496,15 @@ class MainWindow(QMainWindow):
         self.home_page.push_history_preview(clean if clean else raw)
 
     def show_authorized(self) -> None:
-        """The ONLY sanctioned way to make this window visible."""
+        """The ONLY sanctioned way to make this window visible. Voxless is
+        a regular (non-accessory) macOS app, so AppKit activates the
+        process automatically when this window becomes visible."""
         self._show_authorized = True
         if hasattr(self, "_user_opened_flag"):
             self._user_opened_flag["flag"] = True
         super().show()
         super().raise_()
         super().activateWindow()
-        # In LSUIElement / accessory mode the process is not allowed to be
-        # the frontmost app by default. We have to ask AppKit explicitly
-        # to activate us, or the window opens behind every other app.
         if sys.platform == "darwin":
             try:
                 from AppKit import NSApplication  # type: ignore
