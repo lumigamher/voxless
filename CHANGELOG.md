@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.5 — 2026-05-11
+
+- **Dock-click now opens the window again**. v0.3.3's `kAEReopenApplication` blocker was overzealous — it swallowed the event entirely, which also killed the user's intentional dock-click activation. v0.3.5 *routes* the event into the authorized show path instead of swallowing it. The `showEvent` / `event()` guards on `MainWindow` still filter unsolicited shows, so this preserves the defence-in-depth without breaking normal UX.
+
 ## v0.3.4 — 2026-05-11
 
 - **Definitive fix for stuck-recording**. The previous 30 s watchdog only enqueued synthetic release events, which were useless when the worker thread itself was wedged inside `recorder.stop()` (PortAudio on macOS can hang forever when an audio device changes mid-stream). The new watchdog has teeth:

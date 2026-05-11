@@ -22,16 +22,24 @@ SINGLE_INSTANCE_KEY = "voxless-single-instance-v1"
 
 
 _REOPEN_HANDLER = None  # keep a Python reference so it isn't GC'd
+_REOPEN_SHOW_CALLBACK = None  # set by main() — fires when user clicks dock icon
 
 
-def _install_reopen_blocker(log) -> None:
-    """Block macOS' kAEReopenApplication AppleEvent. Without this, AppKit
-    auto-shows our main window when the dock icon is clicked or when the
-    OS decides to reopen us (which fires for various reasons we can't
-    control from inside Qt). This intercept runs BEFORE Qt sees it."""
+def _install_reopen_router(log) -> None:
+    """Route macOS' kAEReopenApplication AppleEvent to our show-window
+    callback. kAEReopenApplication fires when the user clicks the dock
+    icon while the app is running, double-clicks the app bundle while
+    it's running, or activates it via Spotlight while running. These
+    are all intentional "show me the window" actions and should open
+    the main window.
+
+    v0.3.3 installed a handler that SWALLOWED this event, which also
+    killed legitimate dock-click activation — the user could not open
+    the window at all without resorting to the tray menu. v0.3.5 routes
+    the event into our authorized show path. Unsolicited shows are
+    still filtered by MainWindow.event() / showEvent() guards."""
     global _REOPEN_HANDLER
     def _fcc(s: bytes) -> int:
-        # Convert a 4-char ASCII code (e.g. b'aevt') into an OSType int.
         return (s[0] << 24) | (s[1] << 16) | (s[2] << 8) | s[3]
 
     try:
@@ -39,12 +47,16 @@ def _install_reopen_blocker(log) -> None:
 
         class _ReopenHandler(NSObject):
             def handleReopen_withReplyEvent_(self, event, reply):  # noqa: N802
-                log.debug("AppleEvent kAEReopenApplication blocked")
+                log.info("AppleEvent kAEReopenApplication — opening main window")
+                cb = _REOPEN_SHOW_CALLBACK
+                if cb is not None:
+                    # Schedule on the Qt event loop so we don't touch
+                    # QWidgets from the AppleEvent callback thread.
+                    QTimer.singleShot(0, cb)
                 return None
 
         handler = _ReopenHandler.alloc().init()
         manager = NSAppleEventManager.sharedAppleEventManager()
-        # kCoreEventClass / kAEReopenApplication
         manager.setEventHandler_andSelector_forEventClass_andEventID_(
             handler,
             'handleReopen:withReplyEvent:',
@@ -52,9 +64,9 @@ def _install_reopen_blocker(log) -> None:
             _fcc(b'rapp'),
         )
         _REOPEN_HANDLER = handler
-        log.info("Installed AppleEvent reopen blocker")
+        log.info("Installed AppleEvent reopen router")
     except Exception:
-        log.exception("Could not install reopen blocker")
+        log.exception("Could not install reopen router")
 
 
 def _try_send_show_to_existing() -> bool:
@@ -110,7 +122,7 @@ def main() -> int:
     set_lang(cfg.ui_language)
 
     log.info(
-        "Starting voxless 0.3.4 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.3.5 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",
@@ -123,12 +135,11 @@ def main() -> int:
     qt_app.setOrganizationName("voxless")
     qt_app.setQuitOnLastWindowClosed(False)
 
-    # Block macOS' "reopen application" AppleEvent (kAEReopenApplication)
-    # at the AppleEvent layer — this is what fires when the dock icon is
-    # clicked / when AppKit decides to auto-show a hidden window. Qt
-    # normally handles it by showing the main window. We don't want that.
+    # Route macOS' "reopen application" AppleEvent (kAEReopenApplication)
+    # to our show-window callback. The callback is wired below once
+    # _show_window has been defined.
     if sys.platform == "darwin":
-        _install_reopen_blocker(log)
+        _install_reopen_router(log)
 
     if _try_send_show_to_existing():
         log.info("Another voxless instance is running — bringing it to front and exiting.")
@@ -162,6 +173,10 @@ def main() -> int:
     def _show_window() -> None:
         user_opened_window["flag"] = True
         window.show_authorized()
+
+    # Wire dock-click → _show_window via the AppleEvent router installed above.
+    global _REOPEN_SHOW_CALLBACK
+    _REOPEN_SHOW_CALLBACK = _show_window
 
     def _on_quit() -> None:
         log.info("Quit requested")
