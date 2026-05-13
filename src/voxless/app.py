@@ -322,34 +322,49 @@ class App:
 
                 self.signals.transcribed.emit(text_raw, text_clean)
 
-                # Strategy:
-                #  1. If we captured a target app on press, activate it so
-                #     Cmd+V lands there. If we couldn't capture one (voxless
-                #     was frontmost on press — e.g. user had the config
-                #     window open or accidentally focused voxless), hide
-                #     voxless instead so the OS hands focus back to the
-                #     previously-active app.
-                #  2. Give the OS time to switch focus.
-                #  3. Send Cmd+V / Ctrl+V via pynput from voxless — voxless
-                #     already holds the Accessibility grant so this works.
+                # Paste strategy — defensive in depth so Cmd+V NEVER lands
+                # in voxless itself:
+                #  1. ALWAYS deactivate voxless first. macOS may have
+                #     re-activated us when the overlay or another window
+                #     became visible during dictation; this step undoes
+                #     that without waiting for the AppKit auto-deactivate.
+                #  2. If we captured a target app on press, activate it
+                #     synchronously via osascript (with a 2 s timeout so a
+                #     hung osascript can't block paste forever).
+                #  3. Give the OS ~180 ms to actually switch focus.
+                #  4. Last-line safety: verify that voxless is NOT the
+                #     frontmost app right before pressing Cmd+V. If we
+                #     still are (osascript failed, target app was buggy,
+                #     etc), call frontmost.deactivate_self() to force a
+                #     hide — Cmd+V then lands in whichever app macOS
+                #     picks as the next-active one.
+                if sys.platform == "darwin":
+                    try:
+                        from AppKit import NSApplication  # type: ignore
+                        NSApplication.sharedApplication().deactivate()
+                    except Exception:
+                        log.debug("NSApp.deactivate before paste failed", exc_info=True)
+
+                activated = False
                 if self._target_app is not None:
                     try:
-                        if frontmost.activate_app(self._target_app):
-                            time.sleep(0.18)
+                        activated = frontmost.activate_app(self._target_app)
                     except Exception:
-                        log.exception("activate_app failed; pasting anyway")
-                else:
-                    # No captured target. Don't paste into voxless itself
-                    # — push voxless to the background and let macOS give
-                    # focus to whatever was previously active.
+                        log.exception("activate_app raised; will fall back")
+
+                time.sleep(0.18)
+
+                if sys.platform == "darwin" and frontmost.is_voxless_frontmost():
+                    log.warning(
+                        "voxless still frontmost before paste (target_activated=%s) — forcing hide",
+                        activated,
+                    )
                     try:
-                        if frontmost.deactivate_self():
-                            log.info("no target captured — deactivated self before paste")
-                            time.sleep(0.18)
-                        else:
-                            log.warning("no target captured and deactivate_self refused — paste may land in voxless")
+                        frontmost.deactivate_self()
+                        time.sleep(0.18)
                     except Exception:
-                        log.exception("deactivate_self failed; pasting anyway")
+                        log.exception("deactivate_self last-resort failed")
+
                 self._paster.paste(text_clean)
             finally:
                 self._target_app = None

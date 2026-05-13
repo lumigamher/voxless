@@ -47,7 +47,7 @@ def _install_reopen_router(log) -> None:
 
     v0.3.3 installed a handler that SWALLOWED this event, which also
     killed legitimate dock-click activation — the user could not open
-    the window at all without resorting to the tray menu. v0.3.8 routes
+    the window at all without resorting to the tray menu. v0.3.9 routes
     the event into our authorized show path. Unsolicited shows are
     still filtered by MainWindow.event() / showEvent() guards."""
     global _REOPEN_HANDLER
@@ -134,7 +134,7 @@ def main() -> int:
     set_lang(cfg.ui_language)
 
     log.info(
-        "Starting voxless 0.3.8 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.3.9 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",
@@ -207,7 +207,16 @@ def main() -> int:
 
     def _show_window() -> None:
         # Mutex: opening the main window hides the floating overlay so
-        # both are never visible at once.
+        # both are never visible at once. If we're in the middle of
+        # dictating (recording / processing) we must NOT honour the show
+        # request — that would break the mutex from the other direction
+        # and pop the config window during paste. The most common
+        # trigger is the user launching a second voxless instance from
+        # Spotlight / Finder while a dictation is in flight; that new
+        # process sends a "show" message to us before exiting.
+        if backend._state in ("recording", "processing"):
+            log.info("ignoring show request — currently %s (mutex)", backend._state)
+            return
         user_opened_window["flag"] = True
         overlay.hide()
         window.show_authorized()

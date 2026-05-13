@@ -64,8 +64,12 @@ def get_frontmost() -> Any:
 def activate_app(handle: Any) -> bool:
     """Bring the captured app to the foreground without activating voxless.
 
-    macOS: osascript "tell application X to activate" — no permissions
-    needed for the activation itself.
+    macOS: osascript "tell application X to activate" — runs synchronously
+    with a hard 2 s timeout, so the caller knows whether activation
+    actually completed before scheduling the Cmd+V. The previous Popen-
+    and-forget version returned True even when osascript silently failed,
+    which is how paste ended up in voxless on the second dictation.
+
     Windows: SetForegroundWindow on the captured HWND.
     """
     if not handle:
@@ -77,12 +81,23 @@ def activate_app(handle: Any) -> bool:
             if not name:
                 return False
             safe_name = name.replace('"', '')
-            subprocess.Popen(
+            result = subprocess.run(
                 ["osascript", "-e", f'tell application "{safe_name}" to activate'],
+                timeout=2.0,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
             )
+            if result.returncode != 0:
+                log.warning(
+                    "activate_app: osascript exited %d for %r: %s",
+                    result.returncode, safe_name,
+                    result.stderr.decode("utf-8", "replace").strip() or "<no stderr>",
+                )
+                return False
             return True
+        except subprocess.TimeoutExpired:
+            log.warning("activate_app: osascript timed out activating %r", handle)
+            return False
         except Exception:
             log.debug("activate_app: osascript failed", exc_info=True)
             return False

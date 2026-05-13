@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.3.9 — 2026-05-13
+
+- **Paste is now defensive-in-depth, fixing the "second iteration" failure**. The previous flow trusted `activate_app` (a `subprocess.Popen` fire-and-forget that returned True even when osascript silently failed) and didn't verify focus before pressing Cmd+V. New flow:
+  1. `NSApplication.deactivate()` first — undoes any stale activation from the recording overlay.
+  2. `activate_app(target)` synchronously via `subprocess.run` with a 2 s timeout, returning the actual osascript return code.
+  3. Sleep 180 ms.
+  4. **Verify** voxless is NOT frontmost via `frontmost.is_voxless_frontmost()`. If we still are, call `frontmost.deactivate_self()` as a last-resort hide.
+  5. Send Cmd+V.
+- **Second-instance "show" race fixed**. If the user launched voxless again from Spotlight / Finder while a dictation was in flight, the running instance's single-instance handler called `_show_window` mid-paste, breaking the overlay/window mutex from the other direction. `_show_window` now ignores show requests when state is `recording` or `processing`.
+
 ## v0.3.8 — 2026-05-13
 
 - **Fix paste landing in the wrong place when voxless was frontmost on press**. If the user had voxless's own window focused (or accidentally clicked into voxless before dictating) `frontmost.get_frontmost()` returned `None`, so no `activate_app` call was issued and `Cmd+V` fired with voxless still frontmost — the paste went into the void. v0.3.8 falls back to `frontmost.deactivate_self()` when there's no captured target, which hides voxless and lets macOS hand focus to whichever app was previously active. The paste now lands in the right place even when the user fires the hotkey from voxless itself.
