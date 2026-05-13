@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.8 — 2026-05-13
+
+- **Fix paste landing in the wrong place when voxless was frontmost on press**. If the user had voxless's own window focused (or accidentally clicked into voxless before dictating) `frontmost.get_frontmost()` returned `None`, so no `activate_app` call was issued and `Cmd+V` fired with voxless still frontmost — the paste went into the void. v0.3.8 falls back to `frontmost.deactivate_self()` when there's no captured target, which hides voxless and lets macOS hand focus to whichever app was previously active. The paste now lands in the right place even when the user fires the hotkey from voxless itself.
+
 ## v0.3.7 — 2026-05-11
 
 - **Reverted to a regular dock-icon app** (LSUIElement: False). The user wants the dock icon visible.

@@ -47,7 +47,7 @@ def _install_reopen_router(log) -> None:
 
     v0.3.3 installed a handler that SWALLOWED this event, which also
     killed legitimate dock-click activation — the user could not open
-    the window at all without resorting to the tray menu. v0.3.7 routes
+    the window at all without resorting to the tray menu. v0.3.8 routes
     the event into our authorized show path. Unsolicited shows are
     still filtered by MainWindow.event() / showEvent() guards."""
     global _REOPEN_HANDLER
@@ -134,7 +134,7 @@ def main() -> int:
     set_lang(cfg.ui_language)
 
     log.info(
-        "Starting voxless 0.3.7 — hotkey=%s, whisper=%s, ollama=%s",
+        "Starting voxless 0.3.8 — hotkey=%s, whisper=%s, ollama=%s",
         cfg.hotkey,
         cfg.whisper.model,
         cfg.ollama.model if cfg.ollama.enabled else "disabled",

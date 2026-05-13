@@ -323,8 +323,12 @@ class App:
                 self.signals.transcribed.emit(text_raw, text_clean)
 
                 # Strategy:
-                #  1. Activate the target app (osascript on macOS — needs
-                #     no permissions; SetForegroundWindow on Windows).
+                #  1. If we captured a target app on press, activate it so
+                #     Cmd+V lands there. If we couldn't capture one (voxless
+                #     was frontmost on press — e.g. user had the config
+                #     window open or accidentally focused voxless), hide
+                #     voxless instead so the OS hands focus back to the
+                #     previously-active app.
                 #  2. Give the OS time to switch focus.
                 #  3. Send Cmd+V / Ctrl+V via pynput from voxless — voxless
                 #     already holds the Accessibility grant so this works.
@@ -334,6 +338,18 @@ class App:
                             time.sleep(0.18)
                     except Exception:
                         log.exception("activate_app failed; pasting anyway")
+                else:
+                    # No captured target. Don't paste into voxless itself
+                    # — push voxless to the background and let macOS give
+                    # focus to whatever was previously active.
+                    try:
+                        if frontmost.deactivate_self():
+                            log.info("no target captured — deactivated self before paste")
+                            time.sleep(0.18)
+                        else:
+                            log.warning("no target captured and deactivate_self refused — paste may land in voxless")
+                    except Exception:
+                        log.exception("deactivate_self failed; pasting anyway")
                 self._paster.paste(text_clean)
             finally:
                 self._target_app = None
