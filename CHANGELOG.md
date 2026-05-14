@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.10 — 2026-05-13
+
+- **Fix `NameError: name 'sys' is not defined` in paste flow**. v0.3.9 introduced `sys.platform` checks in `app.py` but the module never imported `sys`. Every release event raised, the worker fell through to the error path, and the paste never ran — transcription succeeded but nothing landed on the clipboard. Import added.
+
 ## v0.3.9 — 2026-05-13
 
 - **Paste is now defensive-in-depth, fixing the "second iteration" failure**. The previous flow trusted `activate_app` (a `subprocess.Popen` fire-and-forget that returned True even when osascript silently failed) and didn't verify focus before pressing Cmd+V. New flow:

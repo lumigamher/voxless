@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import queue
+import sys
 import threading
 import time
 from typing import Literal
